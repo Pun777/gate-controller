@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ติดตั้งโปรแกรมลง ESP32</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+  /* Layout: one narrow column; the big install button is the only loud element. */
+  :root {
+    --bg: #f3f5f4;
+    --surface: #ffffff;
+    --ink: #17201e;
+    --muted: #5b6764;
+    --line: #d8dfdc;
+    --accent: #0d6b62;       /* solder-mask teal */
+    --accent-ink: #ffffff;
+    --accent-soft: #e1efec;
+    --ok: #1d7a3a;
+    --warn: #a35a00;
+    --bad: #b3261e;
+    --font-display: "Anuphan", "IBM Plex Sans Thai", "Leelawadee UI", sans-serif;
+    --font-body: "IBM Plex Sans Thai", "Leelawadee UI", "Tahoma", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101615; --surface: #18201f; --ink: #e6eeec; --muted: #9aa8a4; --line: #2b3533;
+      --accent: #3fb3a5; --accent-ink: #062320; --accent-soft: #173431;
+      --ok: #5cc27a; --warn: #f0a640; --bad: #ff8a80; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101615; --surface: #18201f; --ink: #e6eeec; --muted: #9aa8a4; --line: #2b3533;
+    --accent: #3fb3a5; --accent-ink: #062320; --accent-soft: #173431;
+    --ok: #5cc27a; --warn: #f0a640; --bad: #ff8a80; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.7 var(--font-body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  main { max-width: 560px; margin: 0 auto; padding-block: 48px 64px; display: grid; gap: 28px; }
+  h1 { font: 600 clamp(1.7rem, 5vw, 2.2rem)/1.25 var(--font-display); margin: 0; text-wrap: balance; }
+  h2 { font: 600 1.05rem/1.4 var(--font-display); margin: 0; }
+  .eyebrow { font: 400 .8rem/1 var(--font-mono); letter-spacing: .06em; color: var(--muted); text-transform: uppercase; }
+  .lede { color: var(--muted); margin: 6px 0 0; }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px; display: grid; gap: 20px; }
+
+  #install {
+    appearance: none; border: 0; border-radius: 12px; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink);
+    font: 600 1.25rem/1 var(--font-display); padding: 22px 24px; width: 100%;
+    transition: transform .08s ease, filter .15s ease;
+  }
+  #install:hover:not(:disabled) { filter: brightness(1.08); }
+  #install:active:not(:disabled) { transform: translateY(1px); }
+  #install:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  #install:disabled { cursor: progress; opacity: .75; }
+
+  .meter { height: 10px; background: var(--accent-soft); border-radius: 99px; overflow: hidden; }
+  .meter > div { height: 100%; width: 0; background: var(--accent); transition: width .2s linear; }
+  .meter-row { display: flex; justify-content: space-between; gap: 12px; font-size: .9rem; color: var(--muted); }
+  .meter-row b { font: 400 .9rem var(--font-mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  ol.steps li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: start; color: var(--muted); }
+  ol.steps li::before {
+    content: ""; width: 14px; height: 14px; margin-top: 6px; border-radius: 50%;
+    border: 2px solid var(--line); background: transparent;
+  }
+  ol.steps li[data-state="active"] { color: var(--ink); font-weight: 600; }
+  ol.steps li[data-state="active"]::before { border-color: var(--accent); background: var(--accent-soft); animation: pulse 1s ease-in-out infinite; }
+  ol.steps li[data-state="done"] { color: var(--ink); }
+  ol.steps li[data-state="done"]::before { border-color: var(--ok); background: var(--ok); }
+  ol.steps li[data-state="error"] { color: var(--bad); font-weight: 600; }
+  ol.steps li[data-state="error"]::before { border-color: var(--bad); background: var(--bad); }
+  @keyframes pulse { 50% { transform: scale(.75); } }
+  @media (prefers-reduced-motion: reduce) { ol.steps li::before { animation: none !important; } #install { transition: none; } }
+
+  .msg { border-radius: 10px; padding: 14px 16px; border: 1px solid var(--line); }
+  .msg[data-kind="ok"] { border-color: var(--ok); color: var(--ok); }
+  .msg[data-kind="bad"] { border-color: var(--bad); color: var(--bad); }
+  .msg[data-kind="warn"] { border-color: var(--warn); color: var(--warn); }
+  .msg strong { display: block; color: var(--ink); }
+
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font: 400 .85rem var(--font-mono); color: var(--muted); }
+
+  details { border-top: 1px solid var(--line); padding-top: 14px; }
+  details + details { border-top: 0; padding-top: 0; }
+  summary { cursor: pointer; font-weight: 600; }
+  summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  details ul { margin: 10px 0 0; padding-left: 1.2em; display: grid; gap: 8px; }
+  a { color: var(--accent); }
+
+  .checklist { display: grid; gap: 8px; }
+  .checklist ol { margin: 0; padding-left: 1.4em; display: grid; gap: 6px; }
+  .ipbox {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 6px;
+    padding: 14px 16px; border-radius: 10px; background: var(--accent-soft); color: var(--ink);
+  }
+  #ip-link { font: 600 1.15rem var(--font-mono); color: var(--accent); overflow-wrap: anywhere; }
+  pre#log {
+    margin: 10px 0 0; max-height: 220px; overflow: auto; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px; font: 400 .78rem/1.5 var(--font-mono); white-space: pre-wrap; word-break: break-all;
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">ESP32 · USB</div>
+    <h1 id="title">ติดตั้งโปรแกรมลงบอร์ด ESP32</h1>
+    <p class="lede">เสียบสาย USB ระหว่างบอร์ดกับคอมพิวเตอร์ แล้วกดปุ่มด้านล่างครั้งเดียว ไม่ต้องติดตั้งโปรแกรมใดๆ</p>
+  </header>
+
+  <section class="panel" aria-live="polite">
+    <div id="unsupported" class="msg" data-kind="warn" hidden>
+      <strong>เบราว์เซอร์นี้ใช้ติดตั้งไม่ได้</strong>
+      กรุณาเปิดหน้านี้ด้วย Google Chrome หรือ Microsoft Edge บนคอมพิวเตอร์ (Windows, Mac หรือ Linux) โทรศัพท์มือถือยังใช้ไม่ได้
+    </div>
+
+    <div id="before" class="checklist" hidden>
+      <h2>ก่อนกดติดตั้ง</h2>
+      <ol id="before-list"></ol>
+    </div>
+
+    <button id="install" type="button">ติดตั้งลงบอร์ด</button>
+
+    <div id="progress" hidden>
+      <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="meter"><div id="bar"></div></div>
+      <div class="meter-row" style="margin-top:8px"><span id="progress-label">กำลังเขียนโปรแกรม</span><b id="pct">0%</b></div>
+    </div>
+
+    <ol class="steps" id="steps">
+      <li data-step="connect">เลือกบอร์ดในหน้าต่างที่เด้งขึ้น แล้วกด “เชื่อมต่อ”</li>
+      <li data-step="detect">ตรวจรุ่นบอร์ด</li>
+      <li data-step="flash">เขียนโปรแกรมลงบอร์ด</li>
+      <li data-step="reset">รีสตาร์ทบอร์ดให้เริ่มทำงาน</li>
+    </ol>
+
+    <div id="result" class="msg" hidden></div>
+
+    <div id="after" class="checklist" hidden>
+      <h2>ขั้นต่อไป</h2>
+      <ol id="after-list"></ol>
+      <div class="ipbox">
+        <span id="ip-status">กำลังรอบอร์ดรายงาน IP…</span>
+        <a id="ip-link" href="#" target="_blank" rel="noopener" hidden></a>
+      </div>
+    </div>
+
+    <div class="meta">
+      <span>โปรแกรม: <span id="fw-name">…</span></span>
+      <span>เวอร์ชัน: <span id="fw-version">…</span></span>
+      <span>รองรับ: <span id="fw-chips">…</span></span>
+    </div>
+  </section>
+
+  <section>
+    <details>
+      <summary>หาบอร์ดไม่เจอ หรือติดตั้งไม่สำเร็จ</summary>
+      <ul>
+        <li><b>ลองเปลี่ยนสาย USB</b> สายชาร์จมือถือบางเส้นจ่ายไฟได้อย่างเดียว ส่งข้อมูลไม่ได้</li>
+        <li><b>ปิดโปรแกรมอื่นที่ใช้บอร์ดอยู่</b> เช่น Arduino IDE, Serial Monitor หรือหน้านี้ที่เปิดซ้ำอีกแท็บ</li>
+        <li><b>ให้บอร์ดเข้าโหมดรับโปรแกรม</b> ต่อขา IO0 ลง GND แล้วถอดไฟ-เสียบไฟใหม่ (บอร์ดที่มีปุ่ม BOOT ให้กดค้างไว้แทน) ติดตั้งเสร็จแล้วถอด IO0 ออก</li>
+        <li><b>สาย TX/RX ต้องต่อไขว้</b> TX ของตัวแปลงต่อ RX0 ของบอร์ด และ RX ต่อ TX0</li>
+        <li><b>ติดตั้งไดรเวอร์ USB</b> ถ้ารายชื่อในหน้าต่างว่างเปล่า ดูตัวอักษรบนชิปเล็กๆ ใกล้หัว USB ของบอร์ด:
+          <a href="https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers" target="_blank" rel="noopener">CP2102 / CP210x</a> หรือ
+          <a href="https://www.wch-ic.com/downloads/CH341SER_EXE.html" target="_blank" rel="noopener">CH340 / CH341</a>
+          ติดตั้งแล้วถอดสายเสียบใหม่</li>
+      </ul>
+    </details>
+    <details>
+      <summary>ข้อความจากบอร์ด (สำหรับผู้ดูแล)</summary>
+      <pre id="log"></pre>
+    </details>
+  </section>
+</main>
+
+<script type="module">
+  import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.7.0/bundle.js";
+
+  // USB-to-serial chips found on common ESP32 boards. Filtering keeps unrelated ports
+  // (Bluetooth, modems) out of the browser's picker so beginners can't choose the wrong one.
+  const PORT_FILTERS = [
+    { usbVendorId: 0x10c4 }, // Silicon Labs CP210x
+    { usbVendorId: 0x1a86 }, // WCH CH340 / CH9102
+    { usbVendorId: 0x0403 }, // FTDI
+    { usbVendorId: 0x303a }, // Espressif native USB (S2/S3/C3)
+    { usbVendorId: 0x067b }, // Prolific
+  ];
+  const FLASH_BAUD = 460800;
+
+  const $ = (id) => document.getElementById(id);
+  const btn = $("install");
+  const logEl = $("log");
+  let manifest = null;
+
+  const log = (line) => { logEl.textContent += line + "\n"; logEl.scrollTop = logEl.scrollHeight; };
+  const terminal = { clean() { logEl.textContent = ""; }, writeLine: log, write: (s) => { logEl.textContent += s; } };
+
+  function setStep(name, state) {
+    const li = document.querySelector(`[data-step="${name}"]`);
+    if (li) li.dataset.state = state;
+  }
+  function resetSteps() { document.querySelectorAll("#steps li").forEach((li) => delete li.dataset.state); }
+  function showResult(kind, title, body) {
+    const el = $("result");
+    el.dataset.kind = kind;
+    el.innerHTML = "";
+    const s = document.createElement("strong"); s.textContent = title; el.append(s);
+    if (body) el.append(document.createTextNode(body));
+    el.hidden = false;
+  }
+  function setProgress(pct) {
+    const p = Math.max(0, Math.min(100, Math.round(pct)));
+    $("bar").style.width = p + "%";
+    $("pct").textContent = p + "%";
+    $("meter").setAttribute("aria-valuenow", String(p));
+  }
+
+  function fillList(id, items) {
+    const ol = $(id);
+    ol.innerHTML = "";
+    for (const text of items || []) { const li = document.createElement("li"); li.textContent = text; ol.append(li); }
+  }
+
+  // ---- After flashing: listen to the board's serial output and show its IP ----
+  // Matches the sketch's lines "นำ IP ไปเปิดใน browser: 10.0.0.5" and "IP ที่ได้รับ: 10.0.0.5".
+  const IP_LINE = /(?:browser|ที่ได้รับ)\s*:\s*(\d{1,3}(?:\.\d{1,3}){3})/;
+  let listenToken = 0;
+  let listenReader = null;
+
+  async function stopListening() {
+    listenToken++;
+    if (listenReader) { try { await listenReader.cancel(); } catch {} }
+    await new Promise((r) => setTimeout(r, 150));
+  }
+
+  function nextConnect(ms) {
+    return new Promise((resolve) => {
+      const done = (port) => { clearTimeout(t); navigator.serial.removeEventListener("connect", onConnect); resolve(port); };
+      const onConnect = (e) => done(e.target);
+      const t = setTimeout(() => done(null), ms);
+      navigator.serial.addEventListener("connect", onConnect);
+    });
+  }
+
+  async function samePort(info, fallback) {
+    const ports = await navigator.serial.getPorts();
+    return ports.find((p) => {
+      const i = p.getInfo();
+      return i.usbVendorId === info.usbVendorId && i.usbProductId === info.usbProductId;
+    }) || fallback;
+  }
+
+  async function waitForIp(port) {
+    const token = ++listenToken;
+    const info = port.getInfo();
+    const deadline = Date.now() + 5 * 60 * 1000;
+    const status = $("ip-status"), link = $("ip-link");
+    link.hidden = true;
+    status.textContent = "กำลังรอบอร์ดรายงาน IP…";
+    let text = "";
+    while (token === listenToken && Date.now() < deadline) {
+      try {
+        await port.open({ baudRate: 115200 });
+      } catch {
+        // Unplugged (power-cycling) or still busy: wait for it to come back.
+        await nextConnect(2000);
+        port = await samePort(info, port);
+        continue;
+      }
+      const reader = port.readable.getReader();
+      listenReader = reader;
+      const decoder = new TextDecoder();
+      const timer = setTimeout(() => reader.cancel().catch(() => {}), Math.max(0, deadline - Date.now()));
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done || token !== listenToken) break;
+          const chunk = decoder.decode(value, { stream: true });
+          logEl.textContent += chunk;
+          text = (text + chunk).slice(-2000);
+          const m = text.match(IP_LINE);
+          if (m && m[1] !== "0.0.0.0") {
+            status.textContent = "บอร์ดทำงานแล้ว เปิดหน้าควบคุมได้ที่";
+            link.href = `http://${m[1]}/`;
+            link.textContent = `http://${m[1]}/`;
+            link.hidden = false;
+            return;
+          }
+        }
+      } catch {
+        // Device lost mid-read; loop back and wait for it.
+      } finally {
+        clearTimeout(timer);
+        listenReader = null;
+        try { reader.releaseLock(); } catch {}
+        try { await port.close(); } catch {}
+      }
+    }
+    if (token === listenToken) {
+      status.textContent = "ยังไม่ได้รับ IP จากบอร์ด ตรวจว่าเสียบสาย LAN และถอด IO0 ออกจาก GND แล้ว จากนั้นกดติดตั้งใหม่หรือดู IP จากเราเตอร์";
+    }
+  }
+
+  async function loadManifest() {
+    try {
+      const res = await fetch("firmware/firmware.json", { cache: "no-store" });
+      if (!res.ok) throw new Error(res.status);
+      manifest = await res.json();
+      $("fw-name").textContent = manifest.name;
+      $("fw-version").textContent = manifest.version;
+      $("fw-chips").textContent = Object.keys(manifest.builds).join(", ");
+      if (manifest.title) { $("title").textContent = manifest.title; document.title = manifest.title; }
+      fillList("before-list", manifest.beforeInstall);
+      $("before").hidden = !(manifest.beforeInstall || []).length;
+    } catch (e) {
+      $("fw-name").textContent = $("fw-version").textContent = $("fw-chips").textContent = "—";
+      showResult("bad", "ยังไม่มีไฟล์โปรแกรมบนเว็บนี้", " ผู้ดูแลต้องสั่ง build ก่อน (ดู README)");
+      btn.disabled = true;
+    }
+  }
+
+  // Reuse a port the user already approved earlier, so a second install is truly one click.
+  async function pickPort() {
+    const known = await navigator.serial.getPorts();
+    if (known.length === 1) return known[0];
+    return navigator.serial.requestPort({ filters: PORT_FILTERS });
+  }
+
+  function explain(err) {
+    const m = String(err && (err.message || err)).toLowerCase();
+    if (err && err.name === "NotFoundError")
+      return ["ยังไม่ได้เลือกบอร์ด", " กดปุ่มอีกครั้ง แล้วเลือกรายการในหน้าต่างที่เด้งขึ้น ถ้ารายการว่างเปล่า ดูวิธีแก้ด้านล่าง"];
+    if (m.includes("failed to open") || m.includes("already open") || err?.name === "InvalidStateError" || err?.name === "NetworkError")
+      return ["บอร์ดถูกโปรแกรมอื่นใช้อยู่", " ปิด Arduino IDE / Serial Monitor หรือแท็บอื่นที่เปิดหน้านี้ แล้วลองใหม่"];
+    if (m.includes("timeout") || m.includes("failed to connect") || m.includes("wrong boot mode") || m.includes("sync"))
+      return ["บอร์ดยังไม่เข้าโหมดรับโปรแกรม", " ต่อขา IO0 ลง GND (หรือกดปุ่ม BOOT ค้างไว้ถ้าบอร์ดมี) แล้วถอดไฟ-เสียบไฟใหม่ จากนั้นกด “ติดตั้งลงบอร์ด” อีกครั้ง ตรวจด้วยว่าสาย TX/RX ต่อไขว้กัน"];
+    if (m.includes("device has been lost") || m.includes("disconnected"))
+      return ["สาย USB หลุดระหว่างติดตั้ง", " เสียบสายให้แน่น แล้วกดติดตั้งใหม่ บอร์ดไม่เสียหาย"];
+    return ["ติดตั้งไม่สำเร็จ", " ลองถอดสายเสียบใหม่แล้วกดอีกครั้ง ถ้ายังไม่ได้ ส่งข้อความในหัวข้อ “ข้อความจากบอร์ด” ให้ผู้ดูแล"];
+  }
+
+  async function install() {
+    if (!manifest) return;
+    btn.disabled = true;
+    await stopListening();
+    $("after").hidden = true;
+    $("result").hidden = true;
+    $("progress").hidden = true;
+    setProgress(0);
+    resetSteps();
+    terminal.clean();
+
+    let transport = null;
+    let port = null;
+    let flashed = false;
+    let step = "connect";
+    try {
+      setStep("connect", "active");
+      port = await pickPort();
+      btn.textContent = "กำลังติดตั้ง… อย่าถอดสาย";
+      transport = new Transport(port, false);
+      const loader = new ESPLoader({ transport, baudrate: FLASH_BAUD, terminal, debugLogging: false });
+      setStep("connect", "done");
+
+      step = "detect";
+      setStep("detect", "active");
+      await loader.main();
+      const chip = loader.chip.CHIP_NAME;
+      log(`Detected chip: ${chip}`);
+      const build = manifest.builds[chip];
+      if (!build) {
+        setStep("detect", "error");
+        showResult("bad", `บอร์ดรุ่น ${chip} ยังไม่รองรับ`, ` โปรแกรมนี้รองรับ ${Object.keys(manifest.builds).join(", ")}`);
+        return;
+      }
+      setStep("detect", "done");
+      $("steps").querySelector('[data-step="detect"]').textContent = `ตรวจรุ่นบอร์ด: ${chip}`;
+
+      step = "flash";
+      setStep("flash", "active");
+      // Bootloader, partition table, OTA selector and app are written separately.
+      // The settings area (NVS) in between is skipped, so saved IP settings survive.
+      const fileArray = [];
+      for (const part of build.parts) {
+        const res = await fetch("firmware/" + part.path, { cache: "no-store" });
+        if (!res.ok) throw new Error(`Firmware download failed: ${part.path} (${res.status})`);
+        fileArray.push({ data: new Uint8Array(await res.arrayBuffer()), address: part.offset });
+      }
+      const sizes = fileArray.map((f) => f.data.length);
+      const grand = sizes.reduce((a, b) => a + b, 0);
+      $("progress").hidden = false;
+      await loader.writeFlash({
+        fileArray,
+        flashMode: "keep", flashFreq: "keep", flashSize: "keep",
+        eraseAll: false, compress: true,
+        reportProgress: (i, written, total) => {
+          const before = sizes.slice(0, i).reduce((a, b) => a + b, 0);
+          setProgress(((before + (written / total) * sizes[i]) / grand) * 100);
+        },
+      });
+      setProgress(100);
+      setStep("flash", "done");
+      flashed = true;
+
+      step = "reset";
+      setStep("reset", "active");
+      await loader.after("hard_reset");
+      setStep("reset", "done");
+      showResult("ok", "เขียนโปรแกรมเสร็จแล้ว", " ค่า IP ที่เคยตั้งไว้ในบอร์ดยังอยู่ครบ");
+    } catch (err) {
+      console.error(err);
+      log("ERROR: " + (err?.stack || err));
+      setStep(step, "error");
+      const [title, body] = explain(err);
+      showResult(err?.name === "NotFoundError" ? "warn" : "bad", title, body);
+    } finally {
+      try { if (transport) await transport.disconnect(); } catch {}
+      btn.disabled = false;
+      btn.textContent = "ติดตั้งลงบอร์ด";
+    }
+    if (flashed && port) {
+      fillList("after-list", manifest.afterInstall);
+      $("after-list").hidden = !(manifest.afterInstall || []).length;
+      $("after").hidden = false;
+      waitForIp(port);
+    }
+  }
+
+  if (!("serial" in navigator)) {
+    $("unsupported").hidden = false;
+    btn.disabled = true;
+  }
+  btn.addEventListener("click", install);
+  loadManifest();
+</script>
+</body>
+</html>

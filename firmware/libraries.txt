@@ -1,0 +1,6 @@
+# Arduino libraries your sketch needs, one per line, exactly as named in the Library Manager.
+# Optional version pin: Name@1.2.3   Lines starting with # are ignored.
+# Examples:
+# DHT sensor library
+# Adafruit NeoPixel@1.12.3
+# PubSubClient
