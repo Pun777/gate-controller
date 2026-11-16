@@ -139,7 +139,7 @@
     </div>
 
     <ol class="steps" id="steps">
-      <li data-step="connect">เลือกบอร์ดในหน้าต่างที่เด้งขึ้น แล้วกด “เชื่อมต่อ”</li>
+      <li data-step="connect">ในหน้าต่างที่เด้งขึ้น เลือกรายการที่มีคำว่า <b>USB</b> (เช่น “USB Serial Port (COM7)” ไม่ใช่ Bluetooth) แล้วกด “เชื่อมต่อ”</li>
       <li data-step="detect">ตรวจรุ่นบอร์ด</li>
       <li data-step="flash">เขียนโปรแกรมลงบอร์ด</li>
       <li data-step="reset">รีสตาร์ทบอร์ดให้เริ่มทำงาน</li>
@@ -187,15 +187,6 @@
 <script type="module">
   import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.7.0/bundle.js";
 
-  // USB-to-serial chips found on common ESP32 boards. Filtering keeps unrelated ports
-  // (Bluetooth, modems) out of the browser's picker so beginners can't choose the wrong one.
-  const PORT_FILTERS = [
-    { usbVendorId: 0x10c4 }, // Silicon Labs CP210x
-    { usbVendorId: 0x1a86 }, // WCH CH340 / CH9102
-    { usbVendorId: 0x0403 }, // FTDI
-    { usbVendorId: 0x303a }, // Espressif native USB (S2/S3/C3)
-    { usbVendorId: 0x067b }, // Prolific
-  ];
   const FLASH_BAUD = 460800;
 
   const $ = (id) => document.getElementById(id);
@@ -334,7 +325,9 @@
   async function pickPort() {
     const known = await navigator.serial.getPorts();
     if (known.length === 1) return known[0];
-    return navigator.serial.requestPort({ filters: PORT_FILTERS });
+    // No filters: on Windows, adapters using FTDI's own driver (FTDIBUS) don't report
+    // their USB vendor ID to the browser, so a vendor filter hides them completely.
+    return navigator.serial.requestPort();
   }
 
   function explain(err) {
