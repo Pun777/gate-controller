@@ -1,0 +1,22 @@
+# Run the Gate Controller IDE with its own compile server:
+#   docker compose up -d --build
+# then open http://localhost:8080 in Chrome or Edge.
+services:
+  ide:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    image: gate-controller-ide
+    ports:
+      # 127.0.0.1 only: other computers can't reach it. Web Serial (USB upload)
+      # works on http://localhost; any other address needs HTTPS.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ide-data:/data          # saved code, history, published firmware
+    environment:
+      IDE_PASSWORD: ""          # set a password to require login (user: admin)
+      UPDATE_BASE: ""           # e.g. https://ide.example.com/firmware/ once served over HTTPS
+    restart: unless-stopped
+
+volumes:
+  ide-data:

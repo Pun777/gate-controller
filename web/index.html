@@ -400,7 +400,79 @@ async function gh(path, opts = {}) {
   return res.status === 204 ? null : res.json();
 }
 
+/* ======================= Server mode (Docker compile server) ======================= */
+// When the page is served by server/app.py, compiling happens on that server:
+// no GitHub token, ~20-60 s builds, and a Verify button like Arduino IDE.
+let serverMode = false;
+
+async function detectServer() {
+  try {
+    const r = await fetch("api/info", { cache: "no-store" });
+    if (!r.ok) return false;
+    const i = await r.json();
+    return i.mode === "server";
+  } catch { return false; }
+}
+
+async function sha256hex(text) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function serverLoadCode() {
+  const r = await fetch("api/code", { cache: "no-store" });
+  const j = await r.json();
+  code = { sha: "server", saved: j.code };
+  cm.setValue(j.code);
+  cm.clearHistory();
+  setDirty();
+}
+
+async function serverCompile(publish) {
+  clearErrors();
+  showTab("out");
+  out(publish ? "── คอมไพล์และบันทึก ──────────────────" : "── ตรวจโค้ด (Verify) ──────────────────");
+  buildStatus("busy", publish ? "กำลังคอมไพล์" : "กำลังตรวจโค้ด", "ปกติ 20–60 วินาที");
+  const text = cm.getValue();
+  const res = await fetch("api/compile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: text, publish }),
+  });
+  const j = await res.json();
+  if (j.busy) { buildStatus("warn", "เซิร์ฟเวอร์ไม่ว่าง", j.message); out(j.message, "w"); return false; }
+  if (!j.ok) {
+    buildStatus("bad", "คอมไพล์ไม่ผ่าน", `${j.errors.length} จุด · ${j.seconds} วินาที`);
+    out(`✗ คอมไพล์ไม่ผ่าน (${j.seconds} วินาที)`, "e");
+    for (const e of j.errors) {
+      out(`${e.file}:${e.line}:${e.col}  ${e.message}`, "e");
+      if (e.file === "firmware.ino") markError(e.line);
+    }
+    if (!j.errors.length) out(j.log.split("\n").slice(-25).join("\n"), "e");
+    if (errLines[0]) cm.scrollIntoView({ line: cm.getLineNumber(errLines[0]), ch: 0 }, 120);
+    return false;
+  }
+  const size = j.size ? ` · ใช้พื้นที่ ${j.size.percent}% (${(j.size.bytes / 1024).toFixed(0)} KB)` : "";
+  if (j.warnings.length) out(`คำเตือน ${j.warnings.length} จุด (คอมไพล์ผ่าน)`, "w");
+  if (publish) {
+    code.saved = text;
+    setDirty();
+    await loadManifest();
+    buildStatus("ok", "พร้อมอัปโหลด", manifest.version);
+    out(`✓ คอมไพล์และบันทึกแล้ว เวอร์ชัน ${j.version} (${j.seconds} วินาที)${size}`, "o");
+  } else {
+    buildStatus("ok", "โค้ดผ่าน", `${j.seconds} วินาที${size}`);
+    out(`✓ โค้ดคอมไพล์ผ่าน (${j.seconds} วินาที)${size} — ยังไม่ได้บันทึก กด “อัปโหลด” เพื่อบันทึกและลงบอร์ด`, "o");
+  }
+  return true;
+}
+
 async function loadCode() {
+  if (serverMode) {
+    try { await serverLoadCode(); } catch (e) { cm.setValue(`// โหลดโค้ดจากเซิร์ฟเวอร์ไม่สำเร็จ (${e.message})`); }
+    applyEditable();
+    return;
+  }
   if (!repo) { cm.setValue("// เปิดหน้านี้จาก GitHub Pages เพื่อโหลดโค้ด"); return; }
   try {
     const f = await gh(`/repos/${repo}/contents/${SKETCH_PATH}?ref=main`);
@@ -415,8 +487,10 @@ async function loadCode() {
 }
 
 function applyEditable() {
-  cm.setOption("readOnly", !token);
-  $("ro-badge").hidden = !!token;
+  const editable = serverMode || !!token;
+  cm.setOption("readOnly", !editable);
+  $("ro-badge").hidden = editable;
+  $("btn-github").hidden = serverMode;
   $("btn-github").textContent = token ? "GitHub ✓" : "เชื่อมต่อ GitHub";
 }
 
@@ -554,7 +628,16 @@ async function showCompileErrors(run) {
   }
 }
 
-$("btn-build").onclick = buildFlow;
+async function verifyOrBuild() {
+  if (!serverMode) return buildFlow();
+  if (building) return;
+  building = true;
+  $("btn-build").disabled = true;
+  try { await serverCompile(false); }
+  catch (e) { buildStatus("bad", "ติดต่อเซิร์ฟเวอร์ไม่ได้", e.message); out("ERROR: " + e.message, "e"); }
+  finally { building = false; $("btn-build").disabled = false; }
+}
+$("btn-build").onclick = verifyOrBuild;
 
 /* ======================= Ports ======================= */
 let ports = [];
@@ -841,8 +924,22 @@ let uploading = false;
 async function uploadFlow() {
   if (uploading) return;
   if (!("serial" in navigator)) { out("เบราว์เซอร์นี้อัปโหลดไม่ได้ ใช้ Chrome หรือ Edge บนคอมพิวเตอร์", "e"); return; }
+  if (serverMode) {
+    // Like Arduino IDE: Upload compiles the code in the editor first if it changed.
+    const current = await sha256hex(cm.getValue());
+    if (!manifest || manifest.codeHash !== current) {
+      if (building) return;
+      building = true;
+      $("btn-build").disabled = true;
+      let ok = false;
+      try { ok = await serverCompile(true); }
+      catch (e) { buildStatus("bad", "ติดต่อเซิร์ฟเวอร์ไม่ได้", e.message); out("ERROR: " + e.message, "e"); }
+      finally { building = false; $("btn-build").disabled = false; }
+      if (!ok) return;
+    }
+  }
   if (!manifest) { out("ยังไม่มีไฟล์โปรแกรมที่คอมไพล์แล้ว กด “คอมไพล์” ก่อน", "e"); return; }
-  if (cm.getValue() !== code.saved) out("หมายเหตุ: โค้ดที่แก้ยังไม่ได้คอมไพล์ จะอัปโหลดเวอร์ชันล่าสุดที่คอมไพล์แล้ว (" + manifest.version + ")", "w");
+  if (!serverMode && cm.getValue() !== code.saved) out("หมายเหตุ: โค้ดที่แก้ยังไม่ได้คอมไพล์ จะอัปโหลดเวอร์ชันล่าสุดที่คอมไพล์แล้ว (" + manifest.version + ")", "w");
   if (!(await askSafety())) return;
   let port = await needPort();
   if (!port) return;
@@ -936,7 +1033,7 @@ $("btn-upload").onclick = uploadFlow;
 window.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
-  if (k === "s") { e.preventDefault(); buildFlow(); }
+  if (k === "s" || k === "r") { e.preventDefault(); verifyOrBuild(); }
   if (k === "u") { e.preventDefault(); uploadFlow(); }
 });
 
@@ -950,16 +1047,24 @@ if (!("serial" in navigator)) {
   refreshPorts();
 }
 
+serverMode = await detectServer();
+if (serverMode) {
+  $("btn-build").innerHTML = '<span class="ico">✓</span>ตรวจโค้ด';
+  $("btn-build").title = "ตรวจว่าโค้ดคอมไพล์ผ่าน (Ctrl+R)";
+  $("btn-upload").title = "คอมไพล์ บันทึก และอัปโหลดลงบอร์ด (Ctrl+U)";
+}
 applyEditable();
 try {
   await loadManifest();
   buildStatus("ok", "พร้อมอัปโหลด", manifest.version);
 } catch {
   repo = guessRepo();
-  buildStatus("warn", "ยังไม่มีไฟล์ที่คอมไพล์แล้ว", "กด “คอมไพล์” ก่อน");
+  buildStatus("warn", "ยังไม่มีไฟล์ที่คอมไพล์แล้ว", serverMode ? "กด “อัปโหลด” ระบบจะคอมไพล์ให้ก่อน" : "กด “คอมไพล์” ก่อน");
 }
 loadCode();
-out("พร้อมใช้งาน · Ctrl+S = คอมไพล์ · Ctrl+U = อัปโหลด", "d");
+out(serverMode
+  ? "พร้อมใช้งาน (เซิร์ฟเวอร์คอมไพล์ในเครื่อง) · Ctrl+R = ตรวจโค้ด · Ctrl+U = คอมไพล์และอัปโหลด"
+  : "พร้อมใช้งาน · Ctrl+S = คอมไพล์ · Ctrl+U = อัปโหลด", "d");
 </script>
 </body>
 </html>
