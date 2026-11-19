@@ -18,6 +18,7 @@ State Machine ของ RELAY
 #include <HTTPClient.h>          // ✅ [OTA]
 #include <HTTPUpdate.h>          // ✅ [OTA]
 #include "ca_roots.h"            // ✅ [OTA] ใบรับรองสำหรับตรวจว่าดาวน์โหลดจากเว็บจริง
+#include "esp_ota_ops.h"         // ✅ [กันพัง] ย้อนกลับเวอร์ชันเดิมอัตโนมัติ
 
 // ✅ [OTA] tools/build.py สร้าง version.h ให้ตอน build (เลขเวอร์ชัน + ที่อยู่เว็บอัปเดต)
 // ถ้าคอมไพล์จาก Arduino IDE ตรงๆ จะไม่มีไฟล์นี้ บอร์ดจะทำงานปกติแต่ปุ่มอัปเดตจะปิดไว้
@@ -63,6 +64,31 @@ bool updatePending = false;
 unsigned long updateRequestedAt = 0;
 String updateTarget = "";
 String lastUpdateError = "";
+
+// ✅ [กันพัง] หลังอัปเดตผ่าน LAN เวอร์ชันใหม่ต้อง "พิสูจน์ตัวเอง" ก่อน:
+// ต่อ LAN ได้และทำงานต่อเนื่อง 30 วินาที จึงยืนยันให้ใช้ถาวร
+// ถ้าค้าง/รีบูตวน/ต่อ LAN ไม่ได้ใน 3 นาที บอร์ดจะกลับไปใช้เวอร์ชันเดิมเอง
+bool otaPendingVerify = false;
+const unsigned long OTA_CONFIRM_AFTER_MS = 30000;
+const unsigned long OTA_ROLLBACK_AFTER_MS = 180000;
+String lastResetReason = "";
+
+// บอกแกน Arduino ว่าเราจะยืนยันเวอร์ชันใหม่เองทีหลัง (ไม่ต้องยืนยันทันทีตอนบูต)
+bool verifyRollbackLater() { return true; }
+
+String resetReasonText() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:  return "เปิดไฟ";
+    case ESP_RST_SW:       return "สั่งรีสตาร์ท";
+    case ESP_RST_PANIC:    return "โปรแกรมค้าง (panic)";
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:      return "โปรแกรมค้าง (watchdog)";
+    case ESP_RST_BROWNOUT: return "ไฟตก (brownout)";
+    case ESP_RST_EXT:      return "กดรีเซ็ต";
+    default:               return "อื่นๆ";
+  }
+}
 
 // ✅ ฟังก์ชันควบคุม GPIO
 void setOpenGate() {
@@ -195,12 +221,14 @@ void handleUpdate() {
 
   // หน้านี้ถามสถานะทุก 3 วินาที จนบอร์ดรีสตาร์ทกลับมาด้วยเวอร์ชันใหม่
   String script =
-    "<script>const target='" + latest + "',t0=Date.now();"
+    "<script>const target='" + latest + "',t0=Date.now();let down=false;"
     "const T=document.getElementById('t'),B=document.getElementById('b');"
-    "async function poll(){let s='';try{s=(await (await fetch('/update-status',{cache:'no-store'})).text()).trim();}catch(e){}"
-    "if(s==='version:'+target){T.textContent='อัปเดตเสร็จแล้ว';B.textContent='บอร์ดทำงานด้วยเวอร์ชัน '+target;return;}"
-    "if(s.startsWith('failed:')){T.textContent='อัปเดตไม่สำเร็จ';B.textContent=s.slice(7)+' — บอร์ดยังใช้โปรแกรมเดิมอยู่ ลองกดอัปเดตใหม่ได้';return;}"
-    "if(Date.now()-t0>240000){T.textContent='ใช้เวลานานผิดปกติ';B.textContent='ลองเปิดหน้าหลักใหม่ ถ้าบอร์ดไม่ตอบ ให้ถอดไฟแล้วเสียบใหม่';return;}"
+    "async function poll(){let s='';try{s=(await (await fetch('/update-status',{cache:'no-store'})).text()).trim();}catch(e){down=true;}"
+    "if(s==='version:'+target){T.textContent='อัปเดตเสร็จแล้ว';B.textContent='บอร์ดทำงานด้วยเวอร์ชัน '+target+' และยืนยันใช้ถาวรแล้ว';return;}"
+    "if(s==='testing:'+target){T.textContent='ติดตั้งแล้ว กำลังทดสอบ';B.textContent='บอร์ดกำลังเช็กว่าเวอร์ชันใหม่ใช้ LAN ได้ปกติ (ราว 30 วินาที) ถ้าไม่ผ่านจะกลับไปใช้เวอร์ชันเดิมเอง';}"
+    "else if(s.startsWith('failed:')){T.textContent='อัปเดตไม่สำเร็จ';B.textContent=s.slice(7)+' — บอร์ดยังใช้โปรแกรมเดิมอยู่ ลองกดอัปเดตใหม่ได้';return;}"
+    "else if(down&&(s.startsWith('version:')||s.startsWith('testing:'))){T.textContent='เวอร์ชันใหม่ใช้งานไม่ผ่าน';B.textContent='บอร์ดกลับไปใช้เวอร์ชันเดิม ('+s.split(':')[1]+') อย่างปลอดภัยแล้ว ไม้กั้นใช้งานได้ตามปกติ';return;}"
+    "if(Date.now()-t0>360000){T.textContent='ใช้เวลานานผิดปกติ';B.textContent='ลองเปิดหน้าหลักใหม่ ถ้าบอร์ดไม่ตอบ ให้ถอดไฟแล้วเสียบใหม่';return;}"
     "setTimeout(poll,3000);}setTimeout(poll,6000);</script>";
   sendMessagePage("กำลังอัปเดตเป็นเวอร์ชัน " + latest,
                   "ไม้กั้นจะปิดและสั่งเปิดไม่ได้ระหว่างอัปเดต ใช้เวลาประมาณ 1 นาที ห้ามถอดไฟ", script);
@@ -211,6 +239,7 @@ void handleUpdateStatus() {
   String s;
   if (updatePending) s = "updating";
   else if (lastUpdateError.length()) s = "failed:" + lastUpdateError;
+  else if (otaPendingVerify) s = "testing:" + String(FW_VERSION);  // ✅ [กันพัง] ยังอยู่ช่วงทดสอบ
   else s = "version:" + String(FW_VERSION);
   server.send(200, "text/plain; charset=utf-8", s);
 }
@@ -291,7 +320,9 @@ void handleRoot() {
               "<p><strong>IP Mode:</strong> " + ipMode + "</p>"
               "<p><strong>IP Address:</strong> " + ETH.localIP().toString() + "</p>"
               "<p><strong>MAC Address:</strong> " + String(macBuffer) + "</p>"  // ✅ แสดง MAC Address
-              "<p><strong>Firmware:</strong> " + String(FW_VERSION) + "</p>"   // ✅ [OTA] เวอร์ชันโปรแกรม
+              "<p><strong>Firmware:</strong> " + String(FW_VERSION) + String(otaPendingVerify ? " (กำลังทดสอบ)" : "") + "</p>"   // ✅ [OTA] เวอร์ชันโปรแกรม
+              "<p><strong>รีสตาร์ทล่าสุดเพราะ:</strong> " + lastResetReason + "</p>"   // ✅ [กันพัง]
+              + String(esp_reset_reason() == ESP_RST_BROWNOUT ? "<p style='color:#922b21'><strong>⚠️ ไฟตก:</strong> ใช้แหล่งจ่าย 5V อย่างน้อย 1A</p>" : "") +
 
               // ✅ ปุ่มควบคุม GATE CONTROLLER
               "<div class='form-group'>"
@@ -355,6 +386,21 @@ void setup() {
 
     Serial.println("📌 Firmware: " FW_VERSION);
 
+    // ✅ [กันพัง] บอกสาเหตุที่บอร์ดรีสตาร์ทครั้งล่าสุด (เช่น ไฟตก) เพื่อให้รู้ทันว่าไฟเลี้ยงมีปัญหา
+    lastResetReason = resetReasonText();
+    Serial.println("📌 รีสตาร์ทล่าสุดเพราะ: " + lastResetReason);
+    if (esp_reset_reason() == ESP_RST_BROWNOUT) {
+        Serial.println("⚠️ ไฟตก! ใช้แหล่งจ่าย 5V ที่จ่ายกระแสได้อย่างน้อย 1A");
+    }
+
+    // ✅ [กันพัง] ถ้าเพิ่งอัปเดตผ่าน LAN เวอร์ชันนี้ยังอยู่ในช่วงทดลอง
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    esp_ota_img_states_t otaState;
+    if (esp_ota_get_state_partition(running, &otaState) == ESP_OK && otaState == ESP_OTA_IMG_PENDING_VERIFY) {
+        otaPendingVerify = true;
+        Serial.println("📌 เวอร์ชันใหม่: กำลังทดสอบ ถ้าไม่ผ่านจะกลับไปใช้เวอร์ชันเดิมเอง");
+    }
+
     // รับเหตุการณ์ของ Ethernet (ใช้ระบบ event ร่วมกับ Wi-Fi)
     WiFi.onEvent([](arduino_event_t *event) {
         if (event->event_id == ARDUINO_EVENT_ETH_GOT_IP) {
@@ -412,6 +458,20 @@ void loop() {
         setCloseGate();
         gateOpen = false;
         Serial.println("📌 ปิดไม้กั้นอัตโนมัติ (ครบ 10 วินาที)");
+    }
+
+    // ✅ [กันพัง] ยืนยันหรือย้อนกลับเวอร์ชันที่เพิ่งอัปเดต
+    if (otaPendingVerify) {
+        if (eth_connected && currentMillis >= OTA_CONFIRM_AFTER_MS) {
+            esp_ota_mark_app_valid_cancel_rollback();
+            otaPendingVerify = false;
+            Serial.println("✅ เวอร์ชันใหม่ทำงานปกติ ยืนยันใช้ถาวรแล้ว");
+        } else if (currentMillis >= OTA_ROLLBACK_AFTER_MS) {
+            Serial.println("⚠️ เวอร์ชันใหม่ต่อ LAN ไม่ได้ใน 3 นาที กลับไปใช้เวอร์ชันเดิม");
+            setCloseGate();
+            delay(200);
+            esp_ota_mark_app_invalid_rollback_and_reboot();
+        }
     }
 
     if (eth_connected) {

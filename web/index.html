@@ -3,439 +3,963 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ติดตั้งโปรแกรมลง ESP32</title>
+<title>Gate Controller IDE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600&family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <style>
-  /* Layout: one narrow column; the big install button is the only loud element. */
+  /* Layout: IDE frame. Toolbar on top, editor + board-check side panel, output/serial dock at the bottom. */
   :root {
-    --bg: #f3f5f4;
-    --surface: #ffffff;
+    --bg: #eef2f1;
+    --panel: #ffffff;
     --ink: #17201e;
     --muted: #5b6764;
-    --line: #d8dfdc;
-    --accent: #0d6b62;       /* solder-mask teal */
+    --line: #d5ddda;
+    --accent: #0d6b62;
     --accent-ink: #ffffff;
-    --accent-soft: #e1efec;
+    --accent-soft: #dfeeeb;
     --ok: #1d7a3a;
     --warn: #a35a00;
     --bad: #b3261e;
-    --font-display: "Anuphan", "IBM Plex Sans Thai", "Leelawadee UI", sans-serif;
-    --font-body: "IBM Plex Sans Thai", "Leelawadee UI", "Tahoma", sans-serif;
-    --font-mono: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+    --code-bg: #fbfcfc;
+    --term-bg: #10171a;
+    --term-ink: #d7e3e0;
+    --font-body: "IBM Plex Sans Thai", "Leelawadee UI", Tahoma, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #101615; --surface: #18201f; --ink: #e6eeec; --muted: #9aa8a4; --line: #2b3533;
-      --accent: #3fb3a5; --accent-ink: #062320; --accent-soft: #173431;
-      --ok: #5cc27a; --warn: #f0a640; --bad: #ff8a80; color-scheme: dark;
+      --bg: #0f1514; --panel: #171f1e; --ink: #e5eeec; --muted: #98a6a2; --line: #29332f;
+      --accent: #3fb3a5; --accent-ink: #062320; --accent-soft: #163330;
+      --ok: #5cc27a; --warn: #f0a640; --bad: #ff8a80; --code-bg: #131a19; color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #101615; --surface: #18201f; --ink: #e6eeec; --muted: #9aa8a4; --line: #2b3533;
-    --accent: #3fb3a5; --accent-ink: #062320; --accent-soft: #173431;
-    --ok: #5cc27a; --warn: #f0a640; --bad: #ff8a80; color-scheme: dark;
+    --bg: #0f1514; --panel: #171f1e; --ink: #e5eeec; --muted: #98a6a2; --line: #29332f;
+    --accent: #3fb3a5; --accent-ink: #062320; --accent-soft: #163330;
+    --ok: #5cc27a; --warn: #f0a640; --bad: #ff8a80; --code-bg: #131a19; color-scheme: dark;
   }
   * { box-sizing: border-box; }
-  html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
   body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 16px/1.7 var(--font-body);
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 var(--font-body);
+    display: grid; grid-template-rows: auto 1fr auto; min-height: 0;
   }
-  main { max-width: 560px; margin: 0 auto; padding-block: 48px 64px; display: grid; gap: 28px; }
-  h1 { font: 600 clamp(1.7rem, 5vw, 2.2rem)/1.25 var(--font-display); margin: 0; text-wrap: balance; }
-  h2 { font: 600 1.05rem/1.4 var(--font-display); margin: 0; }
-  .eyebrow { font: 400 .8rem/1 var(--font-mono); letter-spacing: .06em; color: var(--muted); text-transform: uppercase; }
-  .lede { color: var(--muted); margin: 6px 0 0; }
-
-  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px; display: grid; gap: 20px; }
-
-  #install {
-    appearance: none; border: 0; border-radius: 12px; cursor: pointer;
-    background: var(--accent); color: var(--accent-ink);
-    font: 600 1.25rem/1 var(--font-display); padding: 22px 24px; width: 100%;
-    transition: transform .08s ease, filter .15s ease;
-  }
-  #install:hover:not(:disabled) { filter: brightness(1.08); }
-  #install:active:not(:disabled) { transform: translateY(1px); }
-  #install:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
-  #install:disabled { cursor: progress; opacity: .75; }
-
-  .meter { height: 10px; background: var(--accent-soft); border-radius: 99px; overflow: hidden; }
-  .meter > div { height: 100%; width: 0; background: var(--accent); transition: width .2s linear; }
-  .meter-row { display: flex; justify-content: space-between; gap: 12px; font-size: .9rem; color: var(--muted); }
-  .meter-row b { font: 400 .9rem var(--font-mono); color: var(--ink); font-variant-numeric: tabular-nums; }
-
-  ol.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-  ol.steps li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; align-items: start; color: var(--muted); }
-  ol.steps li::before {
-    content: ""; width: 14px; height: 14px; margin-top: 6px; border-radius: 50%;
-    border: 2px solid var(--line); background: transparent;
-  }
-  ol.steps li[data-state="active"] { color: var(--ink); font-weight: 600; }
-  ol.steps li[data-state="active"]::before { border-color: var(--accent); background: var(--accent-soft); animation: pulse 1s ease-in-out infinite; }
-  ol.steps li[data-state="done"] { color: var(--ink); }
-  ol.steps li[data-state="done"]::before { border-color: var(--ok); background: var(--ok); }
-  ol.steps li[data-state="error"] { color: var(--bad); font-weight: 600; }
-  ol.steps li[data-state="error"]::before { border-color: var(--bad); background: var(--bad); }
-  @keyframes pulse { 50% { transform: scale(.75); } }
-  @media (prefers-reduced-motion: reduce) { ol.steps li::before { animation: none !important; } #install { transition: none; } }
-
-  .msg { border-radius: 10px; padding: 14px 16px; border: 1px solid var(--line); }
-  .msg[data-kind="ok"] { border-color: var(--ok); color: var(--ok); }
-  .msg[data-kind="bad"] { border-color: var(--bad); color: var(--bad); }
-  .msg[data-kind="warn"] { border-color: var(--warn); color: var(--warn); }
-  .msg strong { display: block; color: var(--ink); }
-
-  .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font: 400 .85rem var(--font-mono); color: var(--muted); }
-
-  details { border-top: 1px solid var(--line); padding-top: 14px; }
-  details + details { border-top: 0; padding-top: 0; }
-  summary { cursor: pointer; font-weight: 600; }
-  summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  details ul { margin: 10px 0 0; padding-left: 1.2em; display: grid; gap: 8px; }
+  button, select, input { font: inherit; color: inherit; }
   a { color: var(--accent); }
 
-  .checklist { display: grid; gap: 8px; }
-  .checklist ol { margin: 0; padding-left: 1.4em; display: grid; gap: 6px; }
-  .ipbox {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 6px;
-    padding: 14px 16px; border-radius: 10px; background: var(--accent-soft); color: var(--ink);
+  /* ---------- Toolbar ---------- */
+  .toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+    padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+    background: var(--panel); border-bottom: 1px solid var(--line);
   }
-  #ip-link { font: 600 1.15rem var(--font-mono); color: var(--accent); overflow-wrap: anywhere; }
-  pre#log {
-    margin: 10px 0 0; max-height: 220px; overflow: auto; background: var(--bg); border: 1px solid var(--line);
-    border-radius: 8px; padding: 12px; font: 400 .78rem/1.5 var(--font-mono); white-space: pre-wrap; word-break: break-all;
+  .brand { display: flex; align-items: baseline; gap: 8px; margin-right: 8px; min-width: 0; }
+  .brand b { font-weight: 600; font-size: 15px; white-space: nowrap; }
+  .chip { font: 400 12px var(--font-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+  .round {
+    display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px;
+    border: 1px solid var(--line); border-radius: 999px; background: var(--panel); cursor: pointer; white-space: nowrap;
+  }
+  .round:hover:not(:disabled) { border-color: var(--accent); }
+  .round:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .round:disabled { opacity: .5; cursor: not-allowed; }
+  .round.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .round .ico { font-size: 16px; line-height: 1; }
+  .field { display: flex; align-items: center; gap: 6px; }
+  .field label { color: var(--muted); font-size: 12px; }
+  select { height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 0 8px; max-width: 230px; }
+  .spacer { flex: 1; }
+
+  /* ---------- Workspace ---------- */
+  .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 0; }
+  .editor-pane { display: grid; grid-template-rows: auto 1fr; min-height: 0; min-width: 0; border-right: 1px solid var(--line); }
+  .tabbar { display: flex; align-items: center; gap: 10px; padding: 6px 16px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; }
+  .tab { font-family: var(--font-mono); padding: 2px 10px; border-radius: 6px; background: var(--accent-soft); }
+  .tab .dirty { color: var(--warn); }
+  .muted { color: var(--muted); }
+  .badge { font-size: 12px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+  #editor { min-height: 0; overflow: hidden; }
+  .CodeMirror { height: 100%; font: 13px/1.55 var(--font-mono); background: var(--code-bg); color: var(--ink); }
+  .CodeMirror-gutters { background: var(--panel); border-right: 1px solid var(--line); }
+  .CodeMirror-linenumber { color: var(--muted); }
+  .CodeMirror-cursor { border-left-color: var(--ink); }
+  .CodeMirror-selected, .CodeMirror-focused .CodeMirror-selected { background: var(--accent-soft) !important; }
+  .cm-s-default .cm-keyword { color: #00979d; }
+  .cm-s-default .cm-def, .cm-s-default .cm-variable-2 { color: #d35400; }
+  .cm-s-default .cm-string { color: #a35a00; }
+  .cm-s-default .cm-comment { color: #7a8783; font-style: italic; }
+  .cm-s-default .cm-meta { color: #5e6d03; }
+  .cm-s-default .cm-number { color: #8a3ffc; }
+  .cm-s-default .cm-variable-3, .cm-s-default .cm-type { color: #00979d; }
+  .err-line { background: color-mix(in srgb, var(--bad) 16%, transparent); }
+
+  .side { overflow: auto; padding: 16px; display: grid; gap: 14px; align-content: start; background: var(--bg); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+  .card h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--muted); }
+  .status { display: grid; grid-template-columns: 14px 1fr; gap: 10px; align-items: start; }
+  .light { width: 14px; height: 14px; border-radius: 50%; margin-top: 4px; background: var(--line); }
+  .light[data-s="ok"] { background: var(--ok); }
+  .light[data-s="warn"] { background: var(--warn); }
+  .light[data-s="bad"] { background: var(--bad); }
+  .light[data-s="busy"] { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .light { animation: none !important; } }
+  .status strong { display: block; }
+  .meter { height: 8px; border-radius: 99px; background: var(--accent-soft); overflow: hidden; }
+  .meter > div { height: 100%; width: 0; background: var(--accent); transition: width .2s linear; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+  .rules { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: 13px; }
+  .iplink { font: 600 15px var(--font-mono); }
+
+  /* ---------- Bottom dock ---------- */
+  .dock { display: grid; grid-template-rows: auto 1fr; height: 34vh; min-height: 180px; background: var(--term-bg); color: var(--term-ink); }
+  .dock-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px max(16px, env(safe-area-inset-right, 0px)) 6px max(16px, env(safe-area-inset-left, 0px)); background: #182226; }
+  .dtab { background: transparent; border: 0; color: #9fb3ad; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+  .dtab[aria-selected="true"] { color: #ffffff; background: #24343a; }
+  .dock-head select, .dock-head input { height: 30px; background: #10171a; color: var(--term-ink); border: 1px solid #2c3d43; border-radius: 6px; }
+  .dock-head .round { height: 30px; background: #10171a; border-color: #2c3d43; color: var(--term-ink); }
+  .dock-body { min-height: 0; display: grid; }
+  .term { margin: 0; overflow: auto; padding: 10px max(16px, env(safe-area-inset-left, 0px)); font: 12.5px/1.55 var(--font-mono); white-space: pre-wrap; word-break: break-word; }
+  .term .e { color: #ff8a80; } .term .w { color: #f0a640; } .term .o { color: #7fd99a; } .term .d { color: #8ea3ad; }
+  .term a { color: #7fd0c6; }
+  .serial-wrap { display: grid; grid-template-rows: 1fr auto; min-height: 0; }
+  .sendrow { display: flex; gap: 8px; padding: 6px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); }
+  .sendrow input { flex: 1; min-width: 0; height: 30px; background: #10171a; color: var(--term-ink); border: 1px solid #2c3d43; border-radius: 6px; padding: 0 8px; }
+
+  /* ---------- Dialogs ---------- */
+  dialog { border: 1px solid var(--line); border-radius: 14px; padding: 0; background: var(--panel); color: var(--ink); width: min(540px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgb(0 0 0 / .45); }
+  .dlg { padding: 20px; display: grid; gap: 14px; }
+  .dlg h3 { margin: 0; font-size: 17px; }
+  .checks { display: grid; gap: 10px; }
+  .checks label { display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; cursor: pointer; }
+  .checks input { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--accent); }
+  .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+  .danger { border-left: 3px solid var(--bad); padding-left: 10px; }
+  #gh-token { width: 100%; height: 38px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; font-family: var(--font-mono); background: var(--panel); }
+
+  @media (max-width: 860px) {
+    .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(320px, 1fr) auto; }
+    .editor-pane { border-right: 0; border-bottom: 1px solid var(--line); }
+    .side { overflow: visible; }
+    .dock { height: 40vh; }
+    body { overflow: auto; height: auto; }
   }
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <div class="eyebrow">ESP32 · USB</div>
-    <h1 id="title">ติดตั้งโปรแกรมลงบอร์ด ESP32</h1>
-    <p class="lede">เสียบสาย USB ระหว่างบอร์ดกับคอมพิวเตอร์ แล้วกดปุ่มด้านล่างครั้งเดียว ไม่ต้องติดตั้งโปรแกรมใดๆ</p>
-  </header>
 
-  <section class="panel" aria-live="polite">
-    <div id="unsupported" class="msg" data-kind="warn" hidden>
-      <strong>เบราว์เซอร์นี้ใช้ติดตั้งไม่ได้</strong>
-      กรุณาเปิดหน้านี้ด้วย Google Chrome หรือ Microsoft Edge บนคอมพิวเตอร์ (Windows, Mac หรือ Linux) โทรศัพท์มือถือยังใช้ไม่ได้
+<header class="toolbar">
+  <div class="brand"><b>Gate Controller IDE</b><span class="chip" id="fw-chip">กำลังโหลด…</span></div>
+  <button class="round" id="btn-build" type="button" title="บันทึกและคอมไพล์ (Ctrl+S)"><span class="ico">✓</span>คอมไพล์</button>
+  <button class="round primary" id="btn-upload" type="button" title="อัปโหลดลงบอร์ด (Ctrl+U)"><span class="ico">→</span>อัปโหลด</button>
+  <div class="field"><label for="board">บอร์ด</label><select id="board"></select></div>
+  <div class="field"><label for="port">พอร์ต</label><select id="port"></select></div>
+  <button class="round" id="btn-addport" type="button">+ เพิ่มพอร์ต</button>
+  <span class="spacer"></span>
+  <button class="round" id="btn-github" type="button">GitHub</button>
+</header>
+
+<main class="workspace">
+  <section class="editor-pane">
+    <div class="tabbar">
+      <span class="tab">firmware.ino <span class="dirty" id="dirty" hidden>●</span></span>
+      <span class="badge" id="ro-badge" hidden>อ่านอย่างเดียว · เชื่อมต่อ GitHub เพื่อแก้</span>
+      <span class="spacer"></span>
+      <span class="muted" id="cursor">บรรทัด 1, คอลัมน์ 1</span>
     </div>
-
-    <div id="before" class="checklist" hidden>
-      <h2>ก่อนกดติดตั้ง</h2>
-      <ol id="before-list"></ol>
-    </div>
-
-    <button id="install" type="button">ติดตั้งลงบอร์ด</button>
-
-    <div id="progress" hidden>
-      <div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="meter"><div id="bar"></div></div>
-      <div class="meter-row" style="margin-top:8px"><span id="progress-label">กำลังเขียนโปรแกรม</span><b id="pct">0%</b></div>
-    </div>
-
-    <ol class="steps" id="steps">
-      <li data-step="connect"><span>ในหน้าต่างที่เด้งขึ้น เลือกรายการที่มีคำว่า <b>USB</b> (เช่น “USB Serial Port (COM7)” ไม่ใช่ Bluetooth) แล้วกด “เชื่อมต่อ”</span></li>
-      <li data-step="detect">ตรวจรุ่นบอร์ด</li>
-      <li data-step="flash">เขียนโปรแกรมลงบอร์ด</li>
-      <li data-step="reset">รีสตาร์ทบอร์ดให้เริ่มทำงาน</li>
-    </ol>
-
-    <div id="result" class="msg" hidden></div>
-
-    <div id="after" class="checklist" hidden>
-      <h2>ขั้นต่อไป</h2>
-      <ol id="after-list"></ol>
-      <div class="ipbox">
-        <span id="ip-status">กำลังรอบอร์ดรายงาน IP…</span>
-        <a id="ip-link" href="#" target="_blank" rel="noopener" hidden></a>
-      </div>
-    </div>
-
-    <div class="meta">
-      <span>โปรแกรม: <span id="fw-name">…</span></span>
-      <span>เวอร์ชัน: <span id="fw-version">…</span></span>
-      <span>รองรับ: <span id="fw-chips">…</span></span>
-    </div>
+    <div id="editor"></div>
   </section>
 
-  <section>
-    <details>
-      <summary>หาบอร์ดไม่เจอ หรือติดตั้งไม่สำเร็จ</summary>
-      <ul>
-        <li><b>ลองเปลี่ยนสาย USB</b> สายชาร์จมือถือบางเส้นจ่ายไฟได้อย่างเดียว ส่งข้อมูลไม่ได้</li>
-        <li><b>ปิดโปรแกรมอื่นที่ใช้บอร์ดอยู่</b> เช่น Arduino IDE, Serial Monitor หรือหน้านี้ที่เปิดซ้ำอีกแท็บ</li>
-        <li><b>ให้บอร์ดเข้าโหมดรับโปรแกรม</b> ต่อขา IO0 ลง GND แล้วถอดไฟ-เสียบไฟใหม่ (บอร์ดที่มีปุ่ม BOOT ให้กดค้างไว้แทน) ติดตั้งเสร็จแล้วถอด IO0 ออก</li>
-        <li><b>สาย TX/RX ต้องต่อไขว้</b> TX ของตัวแปลงต่อ RX0 ของบอร์ด และ RX ต่อ TX0</li>
-        <li><b>ติดตั้งไดรเวอร์ USB</b> ถ้ารายชื่อในหน้าต่างว่างเปล่า ดูตัวอักษรบนชิปเล็กๆ ใกล้หัว USB ของบอร์ด:
-          <a href="https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers" target="_blank" rel="noopener">CP2102 / CP210x</a> หรือ
-          <a href="https://www.wch-ic.com/downloads/CH341SER_EXE.html" target="_blank" rel="noopener">CH340 / CH341</a>
-          ติดตั้งแล้วถอดสายเสียบใหม่</li>
+  <aside class="side">
+    <section class="card" aria-live="polite">
+      <h2>ตรวจบอร์ด</h2>
+      <div class="status"><span class="light" id="b-light"></span><div><strong id="b-title">ยังไม่ได้เชื่อมต่อ</strong><span id="b-detail" class="muted">กด “อัปโหลด” ระบบจะตรวจไฟเลี้ยงและสายก่อนเขียนโปรแกรมทุกครั้ง</span></div></div>
+      <div id="b-progress" hidden><div class="meter"><div id="b-bar"></div></div><div class="muted" id="b-pct">0%</div></div>
+      <div id="b-ip" hidden>บอร์ดทำงานแล้ว เปิดหน้าควบคุม: <a class="iplink" id="b-iplink" target="_blank" rel="noopener"></a></div>
+      <button class="round" id="btn-cancel" type="button" hidden>ยกเลิก</button>
+    </section>
+
+    <section class="card">
+      <h2>คอมไพล์ล่าสุด</h2>
+      <div class="status"><span class="light" id="c-light" data-s="ok"></span><div><strong id="c-title">—</strong><span id="c-detail" class="muted"></span></div></div>
+      <dl class="kv">
+        <dt>เวอร์ชัน</dt><dd id="c-version">—</dd>
+        <dt>รองรับชิป</dt><dd id="c-chips">—</dd>
+      </dl>
+      <a id="c-actions" target="_blank" rel="noopener" hidden>ดูขั้นตอนคอมไพล์บน GitHub</a>
+    </section>
+
+    <section class="card">
+      <h2>กันบอร์ดพัง</h2>
+      <ul class="rules">
+        <li>ไฟเลี้ยง <b>5V เท่านั้น</b> ห้ามต่อ 12V/24V เข้าขา 5V</li>
+        <li>ใช้ไฟแยก: <b>ถอด VCC ของตัวแปลง</b> และต่อ <b>GND ร่วม</b></li>
+        <li>ระบบตรวจไฟตกและสายผิดก่อนเขียนทุกครั้ง และเช็ก MD5 หลังเขียน</li>
+        <li>ค่า IP ในบอร์ดไม่ถูกลบตอนอัปโหลด</li>
+        <li>อัปเดตผ่าน LAN แล้วใช้ไม่ได้ บอร์ดกลับเวอร์ชันเดิมเอง</li>
       </ul>
-    </details>
-    <details>
-      <summary>ข้อความจากบอร์ด (สำหรับผู้ดูแล)</summary>
-      <pre id="log"></pre>
-    </details>
-  </section>
+    </section>
+  </aside>
 </main>
 
+<section class="dock" aria-label="ผลลัพธ์และ Serial Monitor">
+  <div class="dock-head">
+    <button class="dtab" id="tab-out" role="tab" aria-selected="true" type="button">ผลลัพธ์</button>
+    <button class="dtab" id="tab-ser" role="tab" aria-selected="false" type="button">Serial Monitor</button>
+    <span class="spacer"></span>
+    <span id="ser-controls" hidden style="display:contents">
+      <select id="baud" aria-label="ความเร็ว (baud)">
+        <option>9600</option><option>57600</option><option selected>115200</option><option>230400</option><option>460800</option><option>921600</option>
+      </select>
+      <select id="eol" aria-label="ปิดท้ายบรรทัด">
+        <option value="">ไม่ปิดท้าย</option><option value="\n" selected>LF</option><option value="\r\n">CR+LF</option>
+      </select>
+      <label class="d" style="display:flex;align-items:center;gap:4px"><input type="checkbox" id="autoscroll" checked> เลื่อนอัตโนมัติ</label>
+      <button class="round" id="btn-mon" type="button">เชื่อมต่อ</button>
+    </span>
+    <button class="round" id="btn-clear" type="button">ล้าง</button>
+  </div>
+  <div class="dock-body">
+    <pre class="term" id="out"></pre>
+    <div class="serial-wrap" id="serial" hidden>
+      <pre class="term" id="ser"></pre>
+      <form class="sendrow" id="sendform"><input id="sendtext" placeholder="พิมพ์ข้อความส่งไปที่บอร์ด แล้วกด Enter" autocomplete="off"><button class="round" type="submit">ส่ง</button></form>
+    </div>
+  </div>
+</section>
+
+<dialog id="dlg-safety">
+  <form method="dialog" class="dlg" id="safety-form">
+    <h3>เช็กก่อนอัปโหลด</h3>
+    <p class="danger">ต่อไฟผิดทำให้บอร์ดและตัวแปลงเสียได้ทันที ติ๊กให้ครบทุกข้อก่อนเริ่ม</p>
+    <div class="checks" id="safety-checks"></div>
+    <div class="dlg-actions">
+      <button class="round" value="cancel" type="submit">ยกเลิก</button>
+      <button class="round primary" id="safety-ok" value="ok" type="submit" disabled>เริ่มอัปโหลด</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-github">
+  <form method="dialog" class="dlg">
+    <h3>เชื่อมต่อ GitHub เพื่อแก้โค้ด</h3>
+    <p>ต้องใช้ Personal access token ของบัญชีที่เป็นเจ้าของ repo <b id="gh-repo">—</b> token จะเก็บไว้ในเบราว์เซอร์นี้เท่านั้น</p>
+    <ol class="rules">
+      <li>เปิด <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a></li>
+      <li>Repository access: <b>Only select repositories</b> แล้วเลือก repo นี้</li>
+      <li>Permissions: <b>Contents = Read and write</b>, <b>Actions = Read-only</b></li>
+      <li>กด Generate แล้ววาง token ด้านล่าง</li>
+    </ol>
+    <input id="gh-token" type="password" placeholder="github_pat_…" autocomplete="off">
+    <p class="muted" id="gh-status"></p>
+    <div class="dlg-actions">
+      <button class="round" value="forget" type="submit" id="gh-forget">ลบ token</button>
+      <button class="round" value="cancel" type="submit">ปิด</button>
+      <button class="round primary" value="save" type="submit">บันทึก</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
 <script type="module">
-  import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.7.0/bundle.js";
+import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.7.0/bundle.js";
 
-  const FLASH_BAUD = 460800;
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const FLASH_BAUD = 460800;
+const SKETCH_PATH = "firmware/firmware.ino";
+const VENDORS = { 0x0403: "FTDI", 0x1a86: "CH340", 0x10c4: "CP210x", 0x303a: "ESP32 USB", 0x067b: "Prolific" };
 
-  const $ = (id) => document.getElementById(id);
-  const btn = $("install");
-  const logEl = $("log");
-  let manifest = null;
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} },
+};
 
-  const log = (line) => { logEl.textContent += line + "\n"; logEl.scrollTop = logEl.scrollHeight; };
-  const terminal = { clean() { logEl.textContent = ""; }, writeLine: log, write: (s) => { logEl.textContent += s; } };
+/* ======================= Output panel ======================= */
+const outEl = $("out");
+function out(text, cls) {
+  const span = document.createElement("span");
+  if (cls) span.className = cls;
+  span.textContent = text + "\n";
+  outEl.append(span);
+  outEl.scrollTop = outEl.scrollHeight;
+}
+const terminal = { clean() {}, writeLine: (s) => out(s, "d"), write: (s) => out(s, "d") };
 
-  function setStep(name, state) {
-    const li = document.querySelector(`[data-step="${name}"]`);
-    if (li) li.dataset.state = state;
+function showTab(which) {
+  const ser = which === "ser";
+  $("tab-out").setAttribute("aria-selected", String(!ser));
+  $("tab-ser").setAttribute("aria-selected", String(ser));
+  $("out").hidden = ser;
+  $("serial").hidden = !ser;
+  $("ser-controls").hidden = !ser;
+}
+$("tab-out").onclick = () => showTab("out");
+$("tab-ser").onclick = () => showTab("ser");
+$("btn-clear").onclick = () => { if ($("serial").hidden) outEl.textContent = ""; else serEl.textContent = ""; };
+
+/* ======================= Board status card ======================= */
+function boardStatus(s, title, detail) {
+  $("b-light").dataset.s = s || "";
+  $("b-title").textContent = title;
+  $("b-detail").textContent = detail || "";
+}
+function setProgress(p) {
+  const v = Math.max(0, Math.min(100, Math.round(p)));
+  $("b-progress").hidden = false;
+  $("b-bar").style.width = v + "%";
+  $("b-pct").textContent = v + "%";
+}
+
+/* ======================= Manifest & repo ======================= */
+let manifest = null;
+let repo = null;
+
+function guessRepo() {
+  const host = location.hostname;
+  if (!host.endsWith(".github.io")) return null;
+  const owner = host.split(".")[0];
+  const name = location.pathname.split("/").filter(Boolean)[0];
+  return name ? `${owner}/${name}` : `${owner}/${host}`;
+}
+
+async function loadManifest() {
+  const res = await fetch("firmware/firmware.json?ts=" + Date.now(), { cache: "no-store" });
+  if (!res.ok) throw new Error("no manifest");
+  manifest = await res.json();
+  repo = manifest.repo || repo || guessRepo();
+  $("fw-chip").textContent = `${manifest.name} · ${manifest.version}`;
+  $("c-version").textContent = manifest.version;
+  $("c-chips").textContent = Object.keys(manifest.builds).join(", ");
+  const board = $("board");
+  const keep = board.value;
+  board.innerHTML = "";
+  for (const chip of Object.keys(manifest.builds)) {
+    const o = document.createElement("option");
+    o.value = chip;
+    o.textContent = `${chip} (${manifest.name.replace(/^.*\((.*)\).*$/, "$1")})`;
+    board.append(o);
   }
-  function resetSteps() { document.querySelectorAll("#steps li").forEach((li) => delete li.dataset.state); }
-  function showResult(kind, title, body) {
-    const el = $("result");
-    el.dataset.kind = kind;
-    el.innerHTML = "";
-    const s = document.createElement("strong"); s.textContent = title; el.append(s);
-    if (body) el.append(document.createTextNode(body));
-    el.hidden = false;
-  }
-  function setProgress(pct) {
-    const p = Math.max(0, Math.min(100, Math.round(pct)));
-    $("bar").style.width = p + "%";
-    $("pct").textContent = p + "%";
-    $("meter").setAttribute("aria-valuenow", String(p));
-  }
+  if (keep && manifest.builds[keep]) board.value = keep;
+  return manifest;
+}
 
-  function fillList(id, items) {
-    const ol = $(id);
-    ol.innerHTML = "";
-    for (const text of items || []) { const li = document.createElement("li"); li.textContent = text; ol.append(li); }
+/* ======================= Editor ======================= */
+const cm = CodeMirror($("editor"), {
+  value: "// กำลังโหลดโค้ด…",
+  mode: "text/x-c++src",
+  lineNumbers: true,
+  indentUnit: 4,
+  matchBrackets: true,
+  readOnly: true,
+});
+let code = { sha: null, saved: cm.getValue() };
+let errLines = [];
+
+function setDirty() { $("dirty").hidden = cm.getValue() === code.saved; }
+cm.on("change", setDirty);
+cm.on("cursorActivity", () => {
+  const c = cm.getCursor();
+  $("cursor").textContent = `บรรทัด ${c.line + 1}, คอลัมน์ ${c.ch + 1}`;
+});
+window.addEventListener("beforeunload", (e) => { if (code.sha && cm.getValue() !== code.saved) { e.preventDefault(); e.returnValue = ""; } });
+
+function clearErrors() { for (const h of errLines) cm.removeLineClass(h, "background", "err-line"); errLines = []; }
+function markError(line) { const h = cm.addLineClass(line - 1, "background", "err-line"); errLines.push(h); }
+
+const b64encode = (s) => {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+};
+const b64decode = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
+
+/* ======================= GitHub ======================= */
+let token = store.get("gh_token");
+
+async function gh(path, opts = {}) {
+  const headers = { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+  if (token) headers.Authorization = "Bearer " + token;
+  const res = await fetch("https://api.github.com" + path, { ...opts, headers: { ...headers, ...(opts.headers || {}) } });
+  if (!res.ok) {
+    const err = new Error(`GitHub ${res.status}`);
+    err.status = res.status;
+    try { err.detail = (await res.json()).message; } catch {}
+    throw err;
   }
+  return res.status === 204 ? null : res.json();
+}
 
-  // ---- After flashing: listen to the board's serial output and show its IP ----
-  // Matches the sketch's lines "นำ IP ไปเปิดใน browser: 10.0.0.5" and "IP ที่ได้รับ: 10.0.0.5".
-  const IP_LINE = /(?:browser|ที่ได้รับ)\s*:\s*(\d{1,3}(?:\.\d{1,3}){3})/;
-  let listenToken = 0;
-  let listenReader = null;
-
-  async function stopListening() {
-    listenToken++;
-    if (listenReader) { try { await listenReader.cancel(); } catch {} }
-    await new Promise((r) => setTimeout(r, 150));
+async function loadCode() {
+  if (!repo) { cm.setValue("// เปิดหน้านี้จาก GitHub Pages เพื่อโหลดโค้ด"); return; }
+  try {
+    const f = await gh(`/repos/${repo}/contents/${SKETCH_PATH}?ref=main`);
+    code = { sha: f.sha, saved: b64decode(f.content) };
+    cm.setValue(code.saved);
+    cm.clearHistory();
+    setDirty();
+  } catch (e) {
+    cm.setValue(`// โหลดโค้ดจาก GitHub ไม่สำเร็จ (${e.detail || e.message})`);
   }
+  applyEditable();
+}
 
-  function nextConnect(ms) {
-    return new Promise((resolve) => {
-      const done = (port) => { clearTimeout(t); navigator.serial.removeEventListener("connect", onConnect); resolve(port); };
-      const onConnect = (e) => done(e.target);
-      const t = setTimeout(() => done(null), ms);
-      navigator.serial.addEventListener("connect", onConnect);
+function applyEditable() {
+  cm.setOption("readOnly", !token);
+  $("ro-badge").hidden = !!token;
+  $("btn-github").textContent = token ? "GitHub ✓" : "เชื่อมต่อ GitHub";
+}
+
+$("btn-github").onclick = () => {
+  $("gh-repo").textContent = repo || "—";
+  $("gh-token").value = "";
+  $("gh-status").textContent = token ? "เชื่อมต่ออยู่แล้ว วาง token ใหม่เพื่อเปลี่ยน" : "";
+  $("dlg-github").showModal();
+};
+$("dlg-github").addEventListener("close", async () => {
+  const action = $("dlg-github").returnValue;
+  if (action === "forget") { token = null; store.set("gh_token", null); applyEditable(); out("ลบ token แล้ว โค้ดเป็นแบบอ่านอย่างเดียว", "w"); return; }
+  if (action !== "save") return;
+  const t = $("gh-token").value.trim();
+  if (!t) return;
+  const prev = token;
+  token = t;
+  try {
+    const me = await gh("/user");
+    store.set("gh_token", t);
+    out(`เชื่อมต่อ GitHub แล้ว (${me.login}) แก้โค้ดได้แล้ว`, "o");
+    applyEditable();
+  } catch (e) {
+    token = prev;
+    out(`token ใช้ไม่ได้ (${e.detail || e.message}) ตรวจว่าคัดลอกครบและยังไม่หมดอายุ`, "e");
+  }
+});
+
+/* ======================= Build (save → GitHub Actions → Pages) ======================= */
+let building = false;
+
+function buildStatus(s, title, detail) {
+  $("c-light").dataset.s = s;
+  $("c-title").textContent = title;
+  $("c-detail").textContent = detail || "";
+}
+
+async function buildFlow() {
+  if (building) return;
+  if (!token) { $("btn-github").click(); return; }
+  const text = cm.getValue();
+  if (text === code.saved && manifest && manifest.commit) {
+    out("โค้ดไม่ได้เปลี่ยน เวอร์ชันที่คอมไพล์แล้วคือ " + manifest.version, "o");
+    return;
+  }
+  building = true;
+  $("btn-build").disabled = true;
+  clearErrors();
+  showTab("out");
+  try {
+    out("── คอมไพล์ ──────────────────────────");
+    out("บันทึกโค้ดขึ้น GitHub…");
+    buildStatus("busy", "กำลังบันทึก", "");
+    const put = await gh(`/repos/${repo}/contents/${SKETCH_PATH}`, {
+      method: "PUT",
+      body: JSON.stringify({ message: "แก้โค้ดจาก Gate Controller IDE", content: b64encode(text), sha: code.sha, branch: "main" }),
     });
-  }
+    code = { sha: put.content.sha, saved: text };
+    setDirty();
+    const commit = put.commit.sha;
+    out(`บันทึกแล้ว (commit ${commit.slice(0, 7)}) รอเครื่องคอมไพล์ของ GitHub…`);
 
-  async function samePort(info, fallback) {
-    const ports = await navigator.serial.getPorts();
-    return ports.find((p) => {
-      const i = p.getInfo();
-      return i.usbVendorId === info.usbVendorId && i.usbProductId === info.usbProductId;
-    }) || fallback;
-  }
-
-  async function waitForIp(port) {
-    const token = ++listenToken;
-    const info = port.getInfo();
-    const deadline = Date.now() + 5 * 60 * 1000;
-    const status = $("ip-status"), link = $("ip-link");
-    link.hidden = true;
-    status.textContent = "กำลังรอบอร์ดรายงาน IP…";
-    let text = "";
-    while (token === listenToken && Date.now() < deadline) {
-      try {
-        await port.open({ baudRate: 115200 });
-      } catch {
-        // Unplugged (power-cycling) or still busy: wait for it to come back.
-        await nextConnect(2000);
-        port = await samePort(info, port);
-        continue;
-      }
-      const reader = port.readable.getReader();
-      listenReader = reader;
-      const decoder = new TextDecoder();
-      const timer = setTimeout(() => reader.cancel().catch(() => {}), Math.max(0, deadline - Date.now()));
-      try {
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done || token !== listenToken) break;
-          const chunk = decoder.decode(value, { stream: true });
-          logEl.textContent += chunk;
-          text = (text + chunk).slice(-2000);
-          const m = text.match(IP_LINE);
-          if (m && m[1] !== "0.0.0.0") {
-            status.textContent = "บอร์ดทำงานแล้ว เปิดหน้าควบคุมได้ที่";
-            link.href = `http://${m[1]}/`;
-            link.textContent = `http://${m[1]}/`;
-            link.hidden = false;
-            return;
-          }
-        }
-      } catch {
-        // Device lost mid-read; loop back and wait for it.
-      } finally {
-        clearTimeout(timer);
-        listenReader = null;
-        try { reader.releaseLock(); } catch {}
-        try { await port.close(); } catch {}
-      }
+    let run = null;
+    for (let i = 0; i < 40 && !run; i++) {
+      await sleep(3000);
+      const r = await gh(`/repos/${repo}/actions/runs?head_sha=${commit}&per_page=5`);
+      run = r.workflow_runs[0] || null;
     }
-    if (token === listenToken) {
-      status.textContent = "ยังไม่ได้รับ IP จากบอร์ด ตรวจว่าเสียบสาย LAN และถอด IO0 ออกจาก GND แล้ว จากนั้นกดติดตั้งใหม่หรือดู IP จากเราเตอร์";
+    if (!run) throw new Error("ไม่พบงานคอมไพล์บน GitHub Actions");
+    $("c-actions").href = run.html_url;
+    $("c-actions").hidden = false;
+
+    const t0 = Date.now();
+    while (run.status !== "completed") {
+      const sec = Math.round((Date.now() - t0) / 1000);
+      buildStatus("busy", "กำลังคอมไพล์", `ผ่านไป ${sec} วินาที (ปกติ 2–5 นาที)`);
+      await sleep(6000);
+      run = await gh(`/repos/${repo}/actions/runs/${run.id}`);
     }
-  }
 
-  async function loadManifest() {
-    try {
-      const res = await fetch("firmware/firmware.json", { cache: "no-store" });
-      if (!res.ok) throw new Error(res.status);
-      manifest = await res.json();
-      $("fw-name").textContent = manifest.name;
-      $("fw-version").textContent = manifest.version;
-      $("fw-chips").textContent = Object.keys(manifest.builds).join(", ");
-      if (manifest.title) { $("title").textContent = manifest.title; document.title = manifest.title; }
-      fillList("before-list", manifest.beforeInstall);
-      $("before").hidden = !(manifest.beforeInstall || []).length;
-    } catch (e) {
-      $("fw-name").textContent = $("fw-version").textContent = $("fw-chips").textContent = "—";
-      showResult("bad", "ยังไม่มีไฟล์โปรแกรมบนเว็บนี้", " ผู้ดูแลต้องสั่ง build ก่อน (ดู README)");
-      btn.disabled = true;
-    }
-  }
-
-  // Reuse a port the user already approved earlier, so a second install is truly one click.
-  async function pickPort() {
-    const known = await navigator.serial.getPorts();
-    if (known.length === 1) return known[0];
-    // No filters: on Windows, adapters using FTDI's own driver (FTDIBUS) don't report
-    // their USB vendor ID to the browser, so a vendor filter hides them completely.
-    return navigator.serial.requestPort();
-  }
-
-  function explain(err) {
-    const m = String(err && (err.message || err)).toLowerCase();
-    if (err && err.name === "NotFoundError")
-      return ["ยังไม่ได้เลือกบอร์ด", " กดปุ่มอีกครั้ง แล้วเลือกรายการในหน้าต่างที่เด้งขึ้น ถ้ารายการว่างเปล่า ดูวิธีแก้ด้านล่าง"];
-    if (m.includes("failed to open") || m.includes("already open") || err?.name === "InvalidStateError" || err?.name === "NetworkError")
-      return ["บอร์ดถูกโปรแกรมอื่นใช้อยู่", " ปิด Arduino IDE / Serial Monitor หรือแท็บอื่นที่เปิดหน้านี้ แล้วลองใหม่"];
-    if (m.includes("timeout") || m.includes("failed to connect") || m.includes("wrong boot mode") || m.includes("sync"))
-      return ["บอร์ดยังไม่เข้าโหมดรับโปรแกรม", " ต่อขา IO0 ลง GND (หรือกดปุ่ม BOOT ค้างไว้ถ้าบอร์ดมี) แล้วถอดไฟ-เสียบไฟใหม่ จากนั้นกด “ติดตั้งลงบอร์ด” อีกครั้ง ตรวจด้วยว่าสาย TX/RX ต่อไขว้กัน"];
-    if (m.includes("device has been lost") || m.includes("disconnected"))
-      return ["สาย USB หลุดระหว่างติดตั้ง", " เสียบสายให้แน่น แล้วกดติดตั้งใหม่ บอร์ดไม่เสียหาย"];
-    return ["ติดตั้งไม่สำเร็จ", " ลองถอดสายเสียบใหม่แล้วกดอีกครั้ง ถ้ายังไม่ได้ ส่งข้อความในหัวข้อ “ข้อความจากบอร์ด” ให้ผู้ดูแล"];
-  }
-
-  async function install() {
-    if (!manifest) return;
-    btn.disabled = true;
-    await stopListening();
-    $("after").hidden = true;
-    $("result").hidden = true;
-    $("progress").hidden = true;
-    setProgress(0);
-    resetSteps();
-    terminal.clean();
-
-    let transport = null;
-    let port = null;
-    let flashed = false;
-    let step = "connect";
-    try {
-      setStep("connect", "active");
-      port = await pickPort();
-      btn.textContent = "กำลังติดตั้ง… อย่าถอดสาย";
-      transport = new Transport(port, false);
-      const loader = new ESPLoader({ transport, baudrate: FLASH_BAUD, terminal, debugLogging: false });
-      setStep("connect", "done");
-
-      step = "detect";
-      setStep("detect", "active");
-      await loader.main();
-      const chip = loader.chip.CHIP_NAME;
-      log(`Detected chip: ${chip}`);
-      const build = manifest.builds[chip];
-      if (!build) {
-        setStep("detect", "error");
-        showResult("bad", `บอร์ดรุ่น ${chip} ยังไม่รองรับ`, ` โปรแกรมนี้รองรับ ${Object.keys(manifest.builds).join(", ")}`);
+    if (run.conclusion !== "success") {
+      if (run.conclusion === "cancelled") {
+        buildStatus("warn", "ถูกยกเลิก", "มีการบันทึกใหม่ซ้อนเข้ามา");
+        out("งานคอมไพล์ถูกยกเลิก เพราะมีการบันทึกใหม่ซ้อนเข้ามา", "w");
         return;
       }
-      setStep("detect", "done");
-      $("steps").querySelector('[data-step="detect"]').textContent = `ตรวจรุ่นบอร์ด: ${chip}`;
+      await showCompileErrors(run);
+      return;
+    }
 
-      step = "flash";
-      setStep("flash", "active");
-      // Bootloader, partition table, OTA selector and app are written separately.
-      // The settings area (NVS) in between is skipped, so saved IP settings survive.
-      const fileArray = [];
-      for (const part of build.parts) {
-        const res = await fetch("firmware/" + part.path, { cache: "no-store" });
-        if (!res.ok) throw new Error(`Firmware download failed: ${part.path} (${res.status})`);
-        fileArray.push({ data: new Uint8Array(await res.arrayBuffer()), address: part.offset });
+    out("คอมไพล์ผ่าน รอเผยแพร่ไฟล์โปรแกรม…", "o");
+    buildStatus("busy", "กำลังเผยแพร่", "");
+    for (let i = 0; i < 60; i++) {
+      try { await loadManifest(); } catch {}
+      if (manifest && manifest.commit === commit) break;
+      await sleep(5000);
+    }
+    if (!manifest || manifest.commit !== commit) throw new Error("คอมไพล์ผ่านแล้ว แต่ไฟล์บนเว็บยังไม่อัปเดต ลองรีเฟรชหน้าในอีกสักครู่");
+    buildStatus("ok", "พร้อมอัปโหลด", manifest.version);
+    out(`✓ คอมไพล์สำเร็จ เวอร์ชัน ${manifest.version} กด “อัปโหลด” เพื่อลงบอร์ด`, "o");
+  } catch (e) {
+    console.error(e);
+    buildStatus("bad", "คอมไพล์ไม่สำเร็จ", e.detail || e.message);
+    out("ERROR: " + (e.detail || e.message), "e");
+    if (e.status === 409) out("โค้ดบน GitHub ถูกแก้จากที่อื่น รีเฟรชหน้าแล้วแก้ใหม่", "w");
+  } finally {
+    building = false;
+    $("btn-build").disabled = false;
+  }
+}
+
+async function showCompileErrors(run) {
+  buildStatus("bad", "คอมไพล์ไม่ผ่าน", "ดูบรรทัดที่มีปัญหาในหน้าต่างผลลัพธ์");
+  out("✗ คอมไพล์ไม่ผ่าน", "e");
+  try {
+    const jobs = await gh(`/repos/${repo}/actions/runs/${run.id}/jobs`);
+    const failed = jobs.jobs.filter((j) => j.conclusion === "failure");
+    let count = 0;
+    for (const job of failed) {
+      const anns = await gh(`/repos/${repo}/check-runs/${job.id}/annotations`);
+      for (const a of anns) {
+        if (a.annotation_level !== "failure" || !/\.(ino|h|cpp|c)$/.test(a.path)) continue;
+        count++;
+        out(`${a.path}:${a.start_line}  ${a.message}`, "e");
+        if (a.path.endsWith("firmware.ino")) markError(a.start_line);
       }
-      const sizes = fileArray.map((f) => f.data.length);
-      const grand = sizes.reduce((a, b) => a + b, 0);
-      $("progress").hidden = false;
-      await loader.writeFlash({
-        fileArray,
-        flashMode: "keep", flashFreq: "keep", flashSize: "keep",
-        eraseAll: false, compress: true,
-        reportProgress: (i, written, total) => {
-          const before = sizes.slice(0, i).reduce((a, b) => a + b, 0);
-          setProgress(((before + (written / total) * sizes[i]) / grand) * 100);
-        },
+    }
+    if (!count) out("ไม่มีรายละเอียดบรรทัด เปิดลิงก์ “ดูขั้นตอนคอมไพล์บน GitHub” เพื่อดู log เต็ม", "w");
+    else {
+      const first = errLines[0];
+      if (first) cm.scrollIntoView({ line: cm.getLineNumber(first), ch: 0 }, 120);
+    }
+  } catch (e) {
+    out("อ่านรายละเอียด error ไม่ได้ (" + (e.detail || e.message) + ")", "w");
+  }
+}
+
+$("btn-build").onclick = buildFlow;
+
+/* ======================= Ports ======================= */
+let ports = [];
+let selectedPort = null;
+const hex = (n) => n.toString(16).padStart(4, "0");
+
+function portLabel(p, i) {
+  const { usbVendorId: v, usbProductId: pid } = p.getInfo();
+  return v ? `${VENDORS[v] || "USB"} (${hex(v)}:${hex(pid)})` : `พอร์ตที่อนุญาตแล้ว #${i + 1}`;
+}
+
+async function refreshPorts() {
+  if (!("serial" in navigator)) return;
+  ports = await navigator.serial.getPorts();
+  const sel = $("port");
+  sel.innerHTML = "";
+  if (!ports.length) {
+    const o = document.createElement("option");
+    o.textContent = "ยังไม่ได้เลือก — กด “+ เพิ่มพอร์ต”";
+    o.value = "";
+    sel.append(o);
+    selectedPort = null;
+    return;
+  }
+  ports.forEach((p, i) => {
+    const o = document.createElement("option");
+    o.value = String(i);
+    o.textContent = portLabel(p, i);
+    sel.append(o);
+  });
+  const idx = selectedPort ? ports.indexOf(selectedPort) : -1;
+  sel.value = String(idx >= 0 ? idx : 0);
+  selectedPort = ports[Number(sel.value)];
+}
+$("port").onchange = () => { selectedPort = ports[Number($("port").value)] || null; };
+async function addPort() {
+  try {
+    const p = await navigator.serial.requestPort();
+    selectedPort = p;
+    await refreshPorts();
+    out(`เลือกพอร์ต ${portLabel(p, ports.indexOf(p))} แล้ว`);
+    return p;
+  } catch (e) {
+    if (e.name !== "NotFoundError") out("เลือกพอร์ตไม่ได้: " + e.message, "e");
+    return null;
+  }
+}
+$("btn-addport").onclick = addPort;
+async function needPort() { return selectedPort || (await addPort()); }
+
+/* ======================= Serial Monitor ======================= */
+const serEl = $("ser");
+const IP_LINE = /(?:browser|ที่ได้รับ)\s*:\s*(\d{1,3}(?:\.\d{1,3}){3})/;
+let mon = { running: false, reader: null, port: null, tail: "" };
+
+function serAppend(text) {
+  serEl.textContent += text;
+  if (serEl.textContent.length > 200000) serEl.textContent = serEl.textContent.slice(-150000);
+  if ($("autoscroll").checked) serEl.scrollTop = serEl.scrollHeight;
+  mon.tail = (mon.tail + text).slice(-3000);
+  const m = mon.tail.match(IP_LINE);
+  if (m && m[1] !== "0.0.0.0") showIp(m[1]);
+  if (/Brownout|ไฟตก/.test(text)) boardStatus("bad", "ไฟตก (brownout)", "บอร์ดรีเซ็ตเพราะไฟไม่พอ ใช้แหล่งจ่าย 5V อย่างน้อย 1A");
+}
+function showIp(ip) {
+  $("b-ip").hidden = false;
+  $("b-iplink").href = `http://${ip}/`;
+  $("b-iplink").textContent = `http://${ip}/`;
+}
+
+async function monitorStart(port) {
+  if (mon.running) return;
+  port = port || (await needPort());
+  if (!port) return;
+  mon = { running: true, reader: null, port, tail: "" };
+  $("btn-mon").textContent = "ตัดการเชื่อมต่อ";
+  showTab("ser");
+  const info = port.getInfo();
+  while (mon.running) {
+    try {
+      await mon.port.open({ baudRate: Number($("baud").value) });
+    } catch (e) {
+      serAppend(`\n[รอบอร์ด: ${e.message.includes("open") ? "พอร์ตถูกใช้อยู่หรือหลุด" : e.message} — เสียบใหม่แล้วจะต่อให้เอง]\n`);
+      await new Promise((r) => {
+        const t = setTimeout(done, 3000);
+        function done() { clearTimeout(t); navigator.serial.removeEventListener("connect", done); r(); }
+        navigator.serial.addEventListener("connect", done);
       });
-      setProgress(100);
-      setStep("flash", "done");
-      flashed = true;
-
-      step = "reset";
-      setStep("reset", "active");
-      await loader.after("hard_reset");
-      setStep("reset", "done");
-      showResult("ok", "เขียนโปรแกรมเสร็จแล้ว", " ค่า IP ที่เคยตั้งไว้ในบอร์ดยังอยู่ครบ");
-    } catch (err) {
-      console.error(err);
-      log("ERROR: " + (err?.stack || err));
-      setStep(step, "error");
-      const [title, body] = explain(err);
-      showResult(err?.name === "NotFoundError" ? "warn" : "bad", title, body);
+      const again = (await navigator.serial.getPorts()).find((p) => {
+        const i = p.getInfo();
+        return i.usbVendorId === info.usbVendorId && i.usbProductId === info.usbProductId;
+      });
+      if (again) mon.port = again;
+      continue;
+    }
+    const dec = new TextDecoder();
+    mon.reader = mon.port.readable.getReader();
+    try {
+      for (;;) {
+        const { value, done } = await mon.reader.read();
+        if (done) break;
+        serAppend(dec.decode(value, { stream: true }));
+      }
+    } catch {
+      if (mon.running) serAppend("\n[บอร์ดหลุดการเชื่อมต่อ]\n");
     } finally {
-      try { if (transport) await transport.disconnect(); } catch {}
-      btn.disabled = false;
-      btn.textContent = "ติดตั้งลงบอร์ด";
-    }
-    if (flashed && port) {
-      fillList("after-list", manifest.afterInstall);
-      $("after-list").hidden = !(manifest.afterInstall || []).length;
-      $("after").hidden = false;
-      waitForIp(port);
+      try { mon.reader.releaseLock(); } catch {}
+      mon.reader = null;
+      try { await mon.port.close(); } catch {}
     }
   }
+  $("btn-mon").textContent = "เชื่อมต่อ";
+}
 
-  if (!("serial" in navigator)) {
-    $("unsupported").hidden = false;
-    btn.disabled = true;
+async function monitorStop() {
+  if (!mon.running) return;
+  mon.running = false;
+  try { await mon.reader?.cancel(); } catch {}
+  for (let i = 0; i < 20 && mon.reader; i++) await sleep(50);
+  await sleep(100);
+}
+
+$("btn-mon").onclick = () => (mon.running ? monitorStop() : monitorStart(selectedPort));
+$("baud").onchange = async () => { if (mon.running) { const p = mon.port; await monitorStop(); monitorStart(p); } };
+$("sendform").onsubmit = async (e) => {
+  e.preventDefault();
+  if (!mon.running || !mon.port?.writable) { serAppend("\n[ยังไม่ได้เชื่อมต่อ]\n"); return; }
+  const eol = $("eol").value.replace("\\r", "\r").replace("\\n", "\n");
+  const w = mon.port.writable.getWriter();
+  try { await w.write(new TextEncoder().encode($("sendtext").value + eol)); } finally { w.releaseLock(); }
+  $("sendtext").value = "";
+};
+
+/* ======================= Pre-flight: listen to the board before flashing ======================= */
+// The ROM bootloader answers this SYNC command only when the chip is in download mode.
+const SYNC = new Uint8Array([0xc0, 0x00, 0x08, 0x24, 0, 0, 0, 0, 0x07, 0x07, 0x12, 0x20, ...new Array(32).fill(0x55), 0xc0]);
+
+function indexOfSeq(buf, seq) {
+  outer: for (let i = 0; i <= buf.length - seq.length; i++) {
+    for (let j = 0; j < seq.length; j++) if (buf[i + j] !== seq[j]) continue outer;
+    return i;
   }
-  btn.addEventListener("click", install);
-  loadManifest();
+  return -1;
+}
+function countSeq(buf, seq) { let n = 0, i = 0; for (;;) { const k = indexOfSeq(buf.subarray(i), seq); if (k < 0) return n; n++; i += k + seq.length; } }
+
+function classify(buf) {
+  const text = String.fromCharCode(...buf.subarray(0, 20000));
+  const resets = (text.match(/ets Jul 29/g) || []).length;
+  if (indexOfSeq(buf, [0xc0, 0x01, 0x08]) >= 0) return { state: "ready" };
+  if (/Brownout|BOD/.test(text) || resets >= 3) return { state: "power", resets };
+  if (/waiting for download|\(DOWNLOAD/.test(text)) return { state: "nosync" };
+  if (countSeq(buf, [0x07, 0x07, 0x12, 0x20, 0x55, 0x55]) >= 2) return { state: "echo" };
+  if (!buf.length) return { state: "silent" };
+  return { state: "running" };
+}
+
+async function probe(port, ms) {
+  await port.open({ baudRate: 115200 });
+  const reader = port.readable.getReader();
+  const writer = port.writable.getWriter();
+  const chunks = [];
+  let total = 0;
+  const send = () => writer.write(SYNC).catch(() => {});
+  send();
+  const tick = setInterval(send, 250);
+  const stop = setTimeout(() => reader.cancel().catch(() => {}), ms);
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.length;
+      if (total < 65536) {
+        const all = concat(chunks);
+        if (indexOfSeq(all, [0xc0, 0x01, 0x08]) >= 0) break;
+      }
+    }
+  } catch {} finally {
+    clearInterval(tick);
+    clearTimeout(stop);
+    try { reader.releaseLock(); } catch {}
+    try { writer.releaseLock(); } catch {}
+    try { await port.close(); } catch {}
+  }
+  return classify(concat(chunks));
+}
+function concat(chunks) {
+  const n = chunks.reduce((a, c) => a + c.length, 0);
+  const all = new Uint8Array(n);
+  let o = 0;
+  for (const c of chunks) { all.set(c, o); o += c.length; }
+  return all;
+}
+
+async function autoReset(port) {
+  // Same DTR/RTS sequence Arduino IDE uses; boards with an auto-reset circuit enter download mode.
+  try {
+    await port.open({ baudRate: 115200 });
+    await port.setSignals({ dataTerminalReady: false, requestToSend: true });
+    await sleep(100);
+    await port.setSignals({ dataTerminalReady: true, requestToSend: false });
+    await sleep(50);
+    await port.setSignals({ dataTerminalReady: false });
+  } catch {} finally { try { await port.close(); } catch {} }
+}
+
+const ADVICE = {
+  ready:   ["ok",   "บอร์ดพร้อมรับโปรแกรม", ""],
+  power:   ["bad",  "ไฟเลี้ยงไม่พอ — หยุดรอก่อน", "บอร์ดรีเซ็ตวนเพราะไฟตก ใช้แหล่งจ่าย 5V ที่จ่ายได้อย่างน้อย 1A (ไฟจากขา VCC ของตัวแปลงมักไม่พอ) ห้ามใช้ 12V เข้าขา 5V"],
+  echo:    ["warn", "สายสัญญาณผิด", "ข้อมูลสะท้อนกลับ: สาย TX กับ RX แตะกัน หรือ GND ของตัวแปลงกับบอร์ดไม่ได้ต่อร่วม"],
+  nosync:  ["warn", "บอร์ดเข้าโหมดรับโปรแกรมแล้ว แต่ไม่ได้ยินคำสั่ง", "ต่อสาย TX ของตัวแปลง → ขา RXD ของบอร์ด"],
+  running: ["warn", "บอร์ดกำลังรันโปรแกรมเดิม", "ต่อ IO0 ลง GND แล้วถอดไฟบอร์ดเสียบใหม่ตอนนี้ ระบบจะเริ่มเขียนเองเมื่อพร้อม"],
+  silent:  ["warn", "ยังไม่ได้ยินอะไรจากบอร์ด", "ต่อ IO0 ลง GND แล้วถอดไฟบอร์ดเสียบใหม่ตอนนี้ ถ้ายังเงียบ: เช็ก GND ร่วม และสาย RX ของตัวแปลง → TXD ของบอร์ด"],
+  busy:    ["warn", "พอร์ตถูกโปรแกรมอื่นใช้อยู่", "ปิด Arduino IDE, Serial Monitor อื่น หรือแท็บอื่นที่เปิดหน้านี้"],
+  gone:    ["warn", "ตัวแปลง USB หลุด", "เสียบสาย USB ของตัวแปลงกลับเข้าคอมพิวเตอร์ ระบบจะต่อให้เอง"],
+};
+
+let cancelUpload = false;
+$("btn-cancel").onclick = () => { cancelUpload = true; };
+
+async function findSamePort(info, fallback) {
+  const list = await navigator.serial.getPorts();
+  return list.find((p) => {
+    const i = p.getInfo();
+    return i.usbVendorId === info.usbVendorId && i.usbProductId === info.usbProductId;
+  }) || fallback;
+}
+
+// Returns the (possibly re-plugged) port once the chip answers SYNC, or null.
+async function waitForBootloader(port) {
+  const deadline = Date.now() + 120000;
+  const info = port.getInfo();
+  let triedReset = false;
+  let last = "";
+  while (!cancelUpload && Date.now() < deadline) {
+    let r;
+    try {
+      r = await probe(port, 1500);
+    } catch (e) {
+      // USB adapter unplugged or held by another program: wait and pick it up again.
+      r = { state: /open|access/i.test(e.message) && port.connected !== false ? "busy" : "gone" };
+      await sleep(1000);
+      port = await findSamePort(info, port);
+    }
+    if (r.state === "ready") { boardStatus(...ADVICE.ready); out("ตรวจบอร์ด: พร้อมรับโปรแกรม", "o"); return port; }
+    if ((r.state === "running" || r.state === "silent") && !triedReset) { triedReset = true; await autoReset(port); continue; }
+    const [s, title, detail] = ADVICE[r.state];
+    const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+    boardStatus(s, title, `${detail}${r.resets ? ` (รีเซ็ต ${r.resets} ครั้งใน 1.5 วินาที)` : ""} · รออีก ${left} วินาที`);
+    if (r.state !== last) { out(`ตรวจบอร์ด: ${title} — ${detail}`, s === "bad" ? "e" : "w"); last = r.state; }
+    await sleep(200);
+  }
+  boardStatus("bad", cancelUpload ? "ยกเลิกแล้ว" : "บอร์ดยังไม่พร้อมใน 2 นาที", cancelUpload ? "" : ADVICE[last]?.[2] || "");
+  return null;
+}
+
+/* ======================= Upload ======================= */
+const SAFETY_ITEMS = [
+  "ไฟเลี้ยงบอร์ดเป็น <b>5V</b> (ไม่ใช่ 12V/24V) และต่อขั้ว + เข้าขา 5V, − เข้า GND",
+  "ถ้าใช้แหล่งจ่ายไฟแยก: <b>ถอดสาย VCC ของตัวแปลง USB</b> ออก และต่อ <b>GND ร่วมกันทั้งหมด</b>",
+  "สาย TX ของตัวแปลง → <b>RXD</b> ของบอร์ด และ RX → <b>TXD</b>",
+];
+function askSafety() {
+  return new Promise((resolve) => {
+    const box = $("safety-checks");
+    box.innerHTML = "";
+    const items = [...SAFETY_ITEMS, ...((manifest && manifest.beforeInstall) || []).map((t) => t.replace(/</g, "&lt;"))];
+    items.forEach((html, i) => {
+      const l = document.createElement("label");
+      l.innerHTML = `<input type="checkbox" id="sc${i}"><span>${html}</span>`;
+      box.append(l);
+    });
+    const all = () => [...box.querySelectorAll("input")];
+    box.onchange = () => { $("safety-ok").disabled = !all().every((c) => c.checked); };
+    $("safety-ok").disabled = true;
+    const dlg = $("dlg-safety");
+    dlg.addEventListener("close", () => resolve(dlg.returnValue === "ok"), { once: true });
+    dlg.showModal();
+  });
+}
+
+let uploading = false;
+async function uploadFlow() {
+  if (uploading) return;
+  if (!("serial" in navigator)) { out("เบราว์เซอร์นี้อัปโหลดไม่ได้ ใช้ Chrome หรือ Edge บนคอมพิวเตอร์", "e"); return; }
+  if (!manifest) { out("ยังไม่มีไฟล์โปรแกรมที่คอมไพล์แล้ว กด “คอมไพล์” ก่อน", "e"); return; }
+  if (cm.getValue() !== code.saved) out("หมายเหตุ: โค้ดที่แก้ยังไม่ได้คอมไพล์ จะอัปโหลดเวอร์ชันล่าสุดที่คอมไพล์แล้ว (" + manifest.version + ")", "w");
+  if (!(await askSafety())) return;
+  let port = await needPort();
+  if (!port) return;
+
+  uploading = true;
+  cancelUpload = false;
+  $("btn-upload").disabled = true;
+  $("btn-cancel").hidden = false;
+  $("b-progress").hidden = true;
+  $("b-ip").hidden = true;
+  showTab("out");
+  out("── อัปโหลด ──────────────────────────");
+  await monitorStop();
+
+  let transport = null;
+  let ok = false;
+  try {
+    boardStatus("busy", "กำลังตรวจบอร์ด", "ฟังเสียงตอบจากบอร์ด…");
+    port = await waitForBootloader(port);
+    if (!port) return;
+    selectedPort = port;
+    $("btn-cancel").hidden = true;
+
+    transport = new Transport(port, false);
+    const loader = new ESPLoader({ transport, baudrate: FLASH_BAUD, terminal, debugLogging: false });
+    boardStatus("busy", "เชื่อมต่อบอร์ด", "");
+    await loader.main("no_reset");
+    const chip = loader.chip.CHIP_NAME;
+    const want = $("board").value;
+    out(`ชิปที่พบ: ${chip}`);
+    if (chip !== want || !manifest.builds[chip]) {
+      boardStatus("bad", `ชิปไม่ตรง: พบ ${chip}`, `เลือกบอร์ดไว้เป็น ${want} — ไม่เขียนโปรแกรม เพื่อกันบอร์ดเสีย`);
+      out(`หยุด: บอร์ดที่ต่อเป็น ${chip} แต่เลือกไว้เป็น ${want}`, "e");
+      return;
+    }
+
+    const fileArray = [];
+    for (const part of manifest.builds[chip].parts) {
+      const res = await fetch("firmware/" + part.path + "?v=" + encodeURIComponent(manifest.version), { cache: "no-store" });
+      if (!res.ok) throw new Error(`ดาวน์โหลด ${part.path} ไม่ได้ (${res.status})`);
+      fileArray.push({ data: new Uint8Array(await res.arrayBuffer()), address: part.offset });
+    }
+    const sizes = fileArray.map((f) => f.data.length);
+    const grand = sizes.reduce((a, b) => a + b, 0);
+    boardStatus("busy", "กำลังเขียนโปรแกรม", "ห้ามถอดสายหรือไฟ");
+    out(`เขียน ${fileArray.length} ส่วน (${(grand / 1024).toFixed(0)} KB) ข้ามพื้นที่เก็บค่า IP`);
+    await loader.writeFlash({
+      fileArray,
+      flashMode: "keep", flashFreq: "keep", flashSize: "keep",
+      eraseAll: false, compress: true,
+      reportProgress: (i, written, total) => {
+        const before = sizes.slice(0, i).reduce((a, b) => a + b, 0);
+        setProgress(((before + (written / total) * sizes[i]) / grand) * 100);
+      },
+      // esptool-js compares this with the chip's own MD5 of what landed in flash
+      calculateMD5Hash: (image) => CryptoJS.MD5(CryptoJS.lib.WordArray.create(image)).toString(),
+    });
+    setProgress(100);
+    out("✓ เขียนเสร็จ และตรวจ MD5 ตรงกับไฟล์ทุกส่วน", "o");
+    await loader.after("hard_reset");
+    ok = true;
+    boardStatus("ok", "อัปโหลดสำเร็จ", "ถอด IO0 ออกจาก GND แล้วถอดไฟบอร์ดเสียบใหม่ — Serial Monitor จะแสดงข้อความและ IP");
+    out("ขั้นต่อไป: ถอด IO0 ออกจาก GND แล้วถอดไฟบอร์ดเสียบใหม่ เปิด Serial Monitor ให้แล้ว", "o");
+  } catch (e) {
+    console.error(e);
+    const m = String(e && (e.message || e));
+    if (/MD5/i.test(m)) {
+      boardStatus("bad", "ตรวจหลังเขียนไม่ตรง", "ห้ามนำบอร์ดไปใช้ กดอัปโหลดใหม่ ถ้ายังไม่ตรงให้ตรวจไฟเลี้ยง");
+      out("ERROR: ข้อมูลในบอร์ดไม่ตรงกับไฟล์ (" + m + ")", "e");
+    } else if (/open/i.test(m)) {
+      boardStatus("bad", "พอร์ตถูกใช้อยู่", "ปิด Arduino IDE / Serial Monitor อื่น หรือแท็บอื่นที่เปิดหน้านี้");
+      out("ERROR: " + m, "e");
+    } else if (/lost|disconnect/i.test(m)) {
+      boardStatus("bad", "สายหลุดระหว่างเขียน", "เสียบให้แน่นแล้วอัปโหลดใหม่ บอร์ดไม่เสียหาย เขียนซ้ำได้");
+      out("ERROR: " + m, "e");
+    } else {
+      boardStatus("bad", "อัปโหลดไม่สำเร็จ", "ดูรายละเอียดในหน้าต่างผลลัพธ์ แล้วลองใหม่ได้ บอร์ดไม่เสียหาย");
+      out("ERROR: " + m, "e");
+    }
+  } finally {
+    try { if (transport) await transport.disconnect(); } catch {}
+    uploading = false;
+    $("btn-upload").disabled = false;
+    $("btn-cancel").hidden = true;
+  }
+  if (ok) { $("baud").value = "115200"; monitorStart(port); }
+}
+$("btn-upload").onclick = uploadFlow;
+
+/* ======================= Shortcuts & start ======================= */
+window.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === "s") { e.preventDefault(); buildFlow(); }
+  if (k === "u") { e.preventDefault(); uploadFlow(); }
+});
+
+if (!("serial" in navigator)) {
+  boardStatus("bad", "เบราว์เซอร์นี้อัปโหลดไม่ได้", "ใช้ Google Chrome หรือ Microsoft Edge บนคอมพิวเตอร์");
+  $("btn-upload").disabled = true;
+  $("btn-addport").disabled = true;
+} else {
+  navigator.serial.addEventListener("connect", refreshPorts);
+  navigator.serial.addEventListener("disconnect", refreshPorts);
+  refreshPorts();
+}
+
+applyEditable();
+try {
+  await loadManifest();
+  buildStatus("ok", "พร้อมอัปโหลด", manifest.version);
+} catch {
+  repo = guessRepo();
+  buildStatus("warn", "ยังไม่มีไฟล์ที่คอมไพล์แล้ว", "กด “คอมไพล์” ก่อน");
+}
+loadCode();
+out("พร้อมใช้งาน · Ctrl+S = คอมไพล์ · Ctrl+U = อัปโหลด", "d");
 </script>
 </body>
 </html>

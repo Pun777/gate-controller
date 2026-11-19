@@ -20,6 +20,7 @@ import datetime as dt
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -65,6 +66,29 @@ def setup(core_version):
             line = line.strip()
             if line and not line.startswith("#"):
                 run("arduino-cli", "lib", "install", line)
+
+
+def compile_sketch(fqbn, out_dir):
+    """Compile, echo the compiler output, and turn errors into GitHub annotations
+    (the web IDE reads these to mark the failing lines in its editor)."""
+    args = ["arduino-cli", "compile", "--fqbn", fqbn, "--build-path", str(out_dir), str(SKETCH)]
+    print("$ " + " ".join(args), flush=True)
+    res = subprocess.run(args, text=True, encoding="utf-8", errors="replace",
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    print(res.stdout, flush=True)
+    if res.returncode == 0:
+        return
+    if os.environ.get("GITHUB_ACTIONS"):
+        seen = set()
+        for m in re.finditer(r"firmware[\\/]([\w.-]+\.(?:ino|h|cpp|c)):(\d+):(\d+): (?:fatal )?error: (.+)",
+                             res.stdout):
+            key = m.group(0)
+            if key in seen:
+                continue
+            seen.add(key)
+            msg = m.group(4).replace("%", "%25").replace("\r", "").replace("\n", " ")
+            print(f"::error file=firmware/{m.group(1)},line={m.group(2)},col={m.group(3)}::{msg}", flush=True)
+    sys.exit(f"Compile failed for {fqbn}")
 
 
 def boot_app0():
@@ -125,8 +149,7 @@ def main():
     builds = {}
     for target in targets:
         out_dir = BUILD / target
-        run("arduino-cli", "compile", "--fqbn", f"esp32:esp32:{target}",
-            "--build-path", str(out_dir), str(SKETCH))
+        compile_sketch(f"esp32:esp32:{target}", out_dir)
         chip, boot_offset = TARGETS[target]
         dest = OUT / target
         dest.mkdir()
@@ -147,6 +170,8 @@ def main():
         "name": project.get("name", "ESP32 firmware"),
         "title": project.get("title", ""),
         "version": version,
+        "commit": os.environ.get("GITHUB_SHA", ""),
+        "repo": os.environ.get("GITHUB_REPOSITORY", ""),
         "beforeInstall": project.get("beforeInstall", []),
         "afterInstall": project.get("afterInstall", []),
         "builds": builds,
