@@ -158,6 +158,7 @@
   <div class="brand"><b>Gate Controller IDE</b><span class="chip" id="fw-chip">กำลังโหลด…</span></div>
   <button class="round" id="btn-build" type="button" title="บันทึกและคอมไพล์ (Ctrl+S)"><span class="ico">✓</span>คอมไพล์</button>
   <button class="round primary" id="btn-upload" type="button" title="อัปโหลดลงบอร์ด (Ctrl+U)"><span class="ico">→</span>อัปโหลด</button>
+  <button class="round" id="btn-scan" type="button" title="สแกนสาย ไฟเลี้ยง และสถานะบอร์ด โดยไม่เขียนโปรแกรม"><span class="ico">◎</span>ตรวจบอร์ด</button>
   <div class="field"><label for="board">บอร์ด</label><select id="board"></select></div>
   <div class="field"><label for="port">พอร์ต</label><select id="port"></select></div>
   <button class="round" id="btn-addport" type="button">+ เพิ่มพอร์ต</button>
@@ -792,7 +793,12 @@ function classify(buf) {
   if (/waiting for download|\(DOWNLOAD/.test(text)) return { state: "nosync" };
   if (countSeq(buf, [0x07, 0x07, 0x12, 0x20, 0x55, 0x55]) >= 2) return { state: "echo" };
   if (!buf.length) return { state: "silent" };
-  return { state: "running" };
+  // Board is running a program: pull out what our firmware reports at boot.
+  const utf8 = new TextDecoder().decode(buf);
+  const fw = utf8.match(/Firmware:\s*([^\s\r\n]+)/);
+  const ip = utf8.match(/(?:browser|ที่ได้รับ)\s*:\s*(\d{1,3}(?:\.\d{1,3}){3})/);
+  const reason = utf8.match(/รีสตาร์ทล่าสุดเพราะ:\s*([^\r\n]+)/);
+  return { state: "running", firmware: fw?.[1], ip: ip?.[1], reason: reason?.[1]?.trim() };
 }
 
 async function probe(port, ms) {
@@ -1029,6 +1035,77 @@ async function uploadFlow() {
 }
 $("btn-upload").onclick = uploadFlow;
 
+/* ======================= Check board only (no writing) ======================= */
+// Listens for up to 30 s and reports wiring, power and what the board is doing.
+// It never resets the board, so a running gate controller keeps working.
+async function scanFlow() {
+  if (uploading) return;
+  if (!("serial" in navigator)) { out("เบราว์เซอร์นี้ใช้ USB ไม่ได้ ใช้ Chrome หรือ Edge บนคอมพิวเตอร์", "e"); return; }
+  let port = await needPort();
+  if (!port) return;
+  uploading = true;
+  cancelUpload = false;
+  for (const id of ["btn-upload", "btn-scan", "btn-build"]) $(id).disabled = true;
+  $("btn-cancel").hidden = false;
+  $("b-progress").hidden = true;
+  showTab("out");
+  out("── ตรวจบอร์ด (ไม่เขียนโปรแกรม) ──────────────");
+  out("ระหว่างตรวจ 30 วินาที: ถอดไฟบอร์ดแล้วเสียบใหม่ 1 ครั้ง ให้บอร์ดส่งข้อความตอนบูตออกมา", "w");
+  await monitorStop();
+
+  const info = port.getInfo();
+  const deadline = Date.now() + 30000;
+  let last = "", final = null;
+  try {
+    while (!cancelUpload && Date.now() < deadline) {
+      let r;
+      try { r = await probe(port, 2000); }
+      catch (e) {
+        r = { state: /open|access/i.test(e.message) && port.connected !== false ? "busy" : "gone" };
+        await sleep(1000);
+        port = await findSamePort(info, port);
+      }
+      final = r;
+      const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+      if (r.state === "ready") break;
+      if (r.state === "running") break;
+      const [s, title, detail] = ADVICE[r.state];
+      boardStatus(r.state === "silent" ? "busy" : s, r.state === "silent" ? "กำลังฟังบอร์ด…" : title,
+        (r.state === "silent" ? "ถอดไฟบอร์ดแล้วเสียบใหม่ตอนนี้" : detail) + ` · เหลือ ${left} วินาที`);
+      if (r.state !== last && r.state !== "silent") out(`ตรวจบอร์ด: ${title} — ${detail}`, s === "bad" ? "e" : "w");
+      last = r.state;
+      await sleep(200);
+    }
+  } finally {
+    uploading = false;
+    for (const id of ["btn-upload", "btn-scan", "btn-build"]) $(id).disabled = false;
+    $("btn-cancel").hidden = true;
+  }
+
+  if (cancelUpload) { boardStatus("", "ยกเลิกการตรวจแล้ว", ""); return; }
+  const r = final || { state: "silent" };
+  if (r.state === "ready") {
+    boardStatus("ok", "สายและไฟถูกต้อง · พร้อมอัปโหลด", "บอร์ดอยู่ในโหมดรับโปรแกรม (IO0 ต่อ GND) และตอบคำสั่งได้");
+    out("✓ ผลตรวจ: สาย TX/RX, GND และไฟเลี้ยงถูกต้อง บอร์ดพร้อมรับโปรแกรม", "o");
+  } else if (r.state === "running") {
+    const bits = [r.firmware && `เวอร์ชัน ${r.firmware}`, r.ip && `IP ${r.ip}`, r.reason && `รีสตาร์ทเพราะ ${r.reason}`].filter(Boolean);
+    const warnPower = /ไฟตก|brownout/i.test(r.reason || "");
+    boardStatus(warnPower ? "warn" : "ok", warnPower ? "บอร์ดทำงาน แต่เคยรีสตาร์ทเพราะไฟตก" : "บอร์ดกำลังทำงานปกติ",
+      (bits.join(" · ") || "ได้รับข้อความจากบอร์ด สายรับข้อมูลและไฟถูกต้อง") +
+      " — ถ้าจะอัปโหลด ต่อ IO0 ลง GND แล้วถอดไฟเสียบใหม่");
+    out(`✓ ผลตรวจ: บอร์ดกำลังรันโปรแกรม${bits.length ? " (" + bits.join(", ") + ")" : ""}`, warnPower ? "w" : "o");
+    if (r.ip) showIp(r.ip);
+  } else if (r.state === "silent") {
+    boardStatus("warn", "ไม่ได้ยินอะไรจากบอร์ดใน 30 วินาที", ADVICE.silent[2]);
+    out("ผลตรวจ: บอร์ดเงียบ — ถ้าถอดเสียบไฟแล้วยังเงียบ ให้เช็กไฟเลี้ยง, GND ร่วม และสาย RX ของตัวแปลง → TXD ของบอร์ด", "w");
+  } else {
+    const [s, title, detail] = ADVICE[r.state];
+    boardStatus(s, title, detail);
+    out(`ผลตรวจ: ${title} — ${detail}`, s === "bad" ? "e" : "w");
+  }
+}
+$("btn-scan").onclick = scanFlow;
+
 /* ======================= Shortcuts & start ======================= */
 window.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey)) return;
@@ -1041,6 +1118,7 @@ if (!("serial" in navigator)) {
   boardStatus("bad", "เบราว์เซอร์นี้อัปโหลดไม่ได้", "ใช้ Google Chrome หรือ Microsoft Edge บนคอมพิวเตอร์");
   $("btn-upload").disabled = true;
   $("btn-addport").disabled = true;
+  $("btn-scan").disabled = true;
 } else {
   navigator.serial.addEventListener("connect", refreshPorts);
   navigator.serial.addEventListener("disconnect", refreshPorts);
