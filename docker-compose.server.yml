@@ -1,0 +1,39 @@
+# Gate Controller IDE on a shared LAN server (HTTPS, password, resource limits).
+#   cp deploy/.env.example .env   # then set IDE_PASSWORD and SERVER_ADDR
+#   docker compose -f docker-compose.server.yml up -d --build
+# Open https://<SERVER_ADDR>:8843 in Chrome/Edge (user: admin).
+#
+# HTTPS is required: browsers only allow USB upload (Web Serial) on
+# https:// pages or on http://localhost.
+services:
+  ide:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    image: gate-controller-ide
+    volumes:
+      - ide-data:/data
+    environment:
+      IDE_PASSWORD: ${IDE_PASSWORD:?set IDE_PASSWORD in .env}
+      UPDATE_BASE: ${UPDATE_BASE:-}
+    # Keep compiles from starving other services on this host
+    mem_limit: 2g
+    cpus: 2.0
+    restart: unless-stopped
+
+  https:
+    image: caddy:2.8.4-alpine
+    depends_on: [ide]
+    ports:
+      - "${HTTPS_PORT:-8843}:8843"
+    environment:
+      SERVER_ADDR: ${SERVER_ADDR:?set SERVER_ADDR in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data          # keeps the internal CA so the certificate stays the same
+    mem_limit: 256m
+    restart: unless-stopped
+
+volumes:
+  ide-data:
+  caddy-data:

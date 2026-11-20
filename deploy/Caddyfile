@@ -1,0 +1,18 @@
+# HTTPS in front of the IDE with Caddy's own internal certificate authority.
+# Install the root certificate on each PC once (see README) so the browser trusts it.
+{
+	local_certs
+	skip_install_trust
+	default_sni {$SERVER_ADDR}
+}
+
+https://{$SERVER_ADDR}:8843 {
+	tls internal
+	encode gzip
+	reverse_proxy ide:8080 {
+		# compiles can take a while on the first run
+		transport http {
+			read_timeout 10m
+		}
+	}
+}

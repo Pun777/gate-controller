@@ -8,7 +8,7 @@ State Machine ของ RELAY
 | 1  | 1    | ไม่ได้ระบุ  |
 ******/
 
-// new version ล่าสุด
+// new version ล่าสุด  (20/11/69: ETH_CLKMODE -> GPIO0_IN for packet-loss test)
 // ✅ [OTA] = ส่วนที่เพิ่มสำหรับอัปเดตโปรแกรมผ่าน LAN (บอร์ดดาวน์โหลดเวอร์ชันใหม่จากเว็บเอง)
 #include <WiFi.h>
 #include <ETH.h>
@@ -38,7 +38,7 @@ State Machine ของ RELAY
 #define ETH_MDIO 18
 #define ETH_ADDR 1
 #define ETH_TYPE ETH_PHY_LAN8720
-#define ETH_CLKMODE ETH_CLOCK_GPIO17_OUT
+#define ETH_CLKMODE ETH_CLOCK_GPIO0_IN // WT32-ETH01: external 50 MHz oscillator on GPIO0 (was GPIO17_OUT)
 
 // กำหนดขาเชื่อมต่อของ RELAY
 #define RELAY_UP 15 // GPIO 15

@@ -1,14 +1,24 @@
 """End-to-end check of a running compile server: python server/selftest.py http://localhost:8080"""
+import base64
 import json
+import os
 import sys
 import urllib.request
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8080").rstrip("/")
+# Same password the server uses (IDE_PASSWORD), if any
+if os.environ.get("IDE_PASSWORD"):
+    token = base64.b64encode(f"admin:{os.environ['IDE_PASSWORD']}".encode()).decode()
+    opener = urllib.request.build_opener()
+    opener.addheaders = [("Authorization", "Basic " + token)]
+    urllib.request.install_opener(opener)
 
 
 def call(path, body=None):
     req = urllib.request.Request(BASE + path, data=json.dumps(body).encode() if body is not None else None,
                                  headers={"Content-Type": "application/json"})
+    if os.environ.get("IDE_PASSWORD"):
+        req.add_header("Authorization", "Basic " + base64.b64encode(f"admin:{os.environ['IDE_PASSWORD']}".encode()).decode())
     with urllib.request.urlopen(req, timeout=900) as r:
         return json.loads(r.read().decode())
 
