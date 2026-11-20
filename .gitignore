@@ -3,3 +3,4 @@ web/firmware/
 firmware/version.h
 __pycache__/
 .env
+deploy/local/

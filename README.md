@@ -51,6 +51,30 @@ docker compose down
 python server/selftest.py http://localhost:8080
 ```
 
+### ติดตั้งบนเซิร์ฟเวอร์ในวง LAN (HTTPS + รหัสผ่าน)
+
+```bash
+git clone https://github.com/Pun777/gate-controller.git /home/bgs/docker-compose-buildboard-venus
+```
+
+```bash
+cd /home/bgs/docker-compose-buildboard-venus && cp deploy/.env.example .env && nano .env
+```
+
+```bash
+docker compose -f docker-compose.server.yml up -d --build
+```
+
+- เปิด `https://<SERVER_ADDR>:8843` ผู้ใช้ `admin` รหัสผ่านตาม `IDE_PASSWORD` ใน `.env`
+- HTTPS ใช้ใบรับรองของ Caddy เอง ติดตั้งใบรับรอง root ในเครื่องที่ใช้งานครั้งเดียว (ดึงได้ด้วยคำสั่งด้านล่าง) แล้วเบราว์เซอร์จะไม่เตือนอีก
+
+```bash
+docker compose -f docker-compose.server.yml exec -T https cat /data/caddy/pki/authorities/local/root.crt > gate-ide-root-ca.crt
+```
+
+- อัปเดตเป็นโค้ดล่าสุดจาก GitHub: `git pull && docker compose -f docker-compose.server.yml up -d --build`
+- IDE ถูกจำกัด RAM 2 GB / CPU 2 คอร์ เพื่อไม่ให้กระทบบริการอื่นบนเครื่อง
+
 ### ระบบกันบอร์ดพัง
 - **เช็กลิสต์ก่อนอัปโหลด** ทุกครั้ง: ไฟ 5V เท่านั้น ห้าม 12V, ใช้ไฟแยกต้องถอด VCC ของตัวแปลงและต่อ GND ร่วม
 - **ตรวจบอร์ดก่อนเขียน:** ฟังสัญญาณจากบอร์ดแล้วบอกสาเหตุเป็นภาษาไทย เช่น ไฟไม่พอ (รีเซ็ตวน), สาย TX/RX แตะกัน, ยังไม่เข้าโหมดรับโปรแกรม และรอจนบอร์ดพร้อมแล้วค่อยเขียน ไม่เขียนทั้งที่ไฟไม่พอ
