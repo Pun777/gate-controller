@@ -72,6 +72,7 @@
   .field label { color: var(--muted); font-size: 12px; }
   select { height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 0 8px; max-width: 230px; }
   .spacer { flex: 1; }
+  @media (max-width: 1500px) { body:not([data-mode="install"]) .chip { display: none; } .toolbar { gap: 8px 8px; } .round { padding: 0 11px; } select { max-width: 190px; } }
 
   /* ---------- Workspace ---------- */
   .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 0; }
@@ -143,8 +144,94 @@
   .danger { border-left: 3px solid var(--bad); padding-left: 10px; }
   #gh-token { width: 100%; height: 38px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; font-family: var(--font-mono); background: var(--panel); }
 
+  /* ---------- Mode switch ---------- */
+  body { grid-template-columns: minmax(0, 1fr); }
+  .modes { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--bg); }
+  .modes button { border: 0; background: transparent; border-radius: 999px; padding: 5px 14px; cursor: pointer; color: var(--muted); white-space: nowrap; }
+  .modes button[aria-pressed="true"] { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+  .modes button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  body[data-mode="install"] .dev-only,
+  body[data-mode="install"] .workspace,
+  body[data-mode="install"] .dock { display: none !important; }
+  body:not([data-mode="install"]) #installer { display: none !important; }
+
+  /* ---------- Install mode (wizard for technicians) ---------- */
+  .installer { overflow: auto; padding-block: 24px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .wz { max-width: 860px; margin: 0 auto; display: grid; gap: 18px; }
+  .wz-head h1 { margin: 0; font-size: clamp(22px, 3.4vw, 30px); line-height: 1.3; text-wrap: balance; }
+  .wz-head p { margin: 4px 0 0; color: var(--muted); }
+  .wz-step { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .wz-step .num { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font: 600 18px var(--font-mono); background: var(--accent-soft); color: var(--accent); }
+  .wz-step[data-done="true"] .num { background: var(--ok); color: #fff; }
+  .wz-step h2 { margin: 0 0 6px; font-size: 17px; }
+  .wz-step p { margin: 0 0 10px; color: var(--muted); }
+  .wz-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+  .linkbtn { border: 0; background: none; color: var(--accent); text-decoration: underline; cursor: pointer; padding: 4px 0; }
+  .big { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 0 28px; border-radius: 12px; border: 0; font-size: 17px; font-weight: 600; cursor: pointer; text-decoration: none; }
+  .big.primary { background: var(--accent); color: var(--accent-ink); }
+  .big:disabled { opacity: .45; cursor: not-allowed; }
+  .big:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  .wz-port-name { font-family: var(--font-mono); font-size: 13px; }
+  .wz-status { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--bg); }
+
+  /* ---------- Wiring diagram ---------- */
+  .wiring svg { width: 100%; height: auto; max-width: 680px; display: block; }
+  .wiring .box { fill: var(--bg); stroke: var(--line); stroke-width: 2; }
+  .wiring .title { fill: var(--ink); font: 600 15px var(--font-body); }
+  .wiring .pin { fill: var(--panel); stroke: var(--muted); stroke-width: 1.5; }
+  .wiring .pinlabel { fill: var(--ink); font: 600 13px var(--font-mono); }
+  .wiring .wirelabel { fill: var(--muted); font: 12px var(--font-body); }
+  .wiring .note { fill: var(--muted); font: 12px var(--font-body); }
+  .wiring [data-wire] path { fill: none; stroke-width: 5; stroke-linecap: round; transition: opacity .2s; }
+  .wiring [data-wire="5v"] path { stroke: #d63a2f; }
+  .wiring [data-wire="gnd"] path { stroke: var(--ink); }
+  .wiring [data-wire="tx"] path { stroke: #1f9d55; }
+  .wiring [data-wire="rx"] path { stroke: #c58f00; }
+  .wiring [data-wire="io0"] path { stroke: #2f6fdb; stroke-dasharray: 8 6; }
+  .wiring.has-bad [data-wire]:not(.bad) { opacity: .25; }
+  .wiring [data-wire].bad path { stroke: var(--bad); stroke-width: 8; stroke-dasharray: 14 8; animation: wirepulse 1s linear infinite; }
+  .wiring [data-wire].bad .wirelabel { fill: var(--bad); font-weight: 600; }
+  @keyframes wirepulse { to { stroke-dashoffset: -44; } }
+  @media (prefers-reduced-motion: reduce) { .wiring [data-wire].bad path { animation: none; } }
+
+  /* ---------- Full-screen progress ---------- */
+  .ov { position: fixed; inset: 0; z-index: 50; background: rgb(8 14 13 / .55); display: grid; place-items: center; padding: 16px; overflow: auto; }
+  .ov-card { width: min(680px, 100%); background: var(--panel); color: var(--ink); border-radius: 16px; padding: 24px; display: grid; gap: 16px; box-shadow: 0 20px 60px rgb(0 0 0 / .35); }
+  .ov-card h2 { margin: 0; font-size: 22px; }
+  .ov-stages { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; }
+  .ov-stages li { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .ov-stages li::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); }
+  .ov-stages li[data-state="active"] { color: var(--ink); font-weight: 600; }
+  .ov-stages li[data-state="active"]::before { border-color: var(--accent); background: var(--accent-soft); animation: pulse 1s ease-in-out infinite; }
+  .ov-stages li[data-state="done"]::before { border-color: var(--ok); background: var(--ok); }
+  .ov-stages li[data-state="error"] { color: var(--bad); font-weight: 600; }
+  .ov-stages li[data-state="error"]::before { border-color: var(--bad); background: var(--bad); }
+  .ov-big { display: grid; gap: 8px; }
+  #ov-pct { font: 600 44px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+  .ov-big .meter { height: 12px; }
+  .ov-msg { border-radius: 12px; padding: 14px 16px; border: 2px solid var(--line); display: grid; gap: 4px; }
+  .ov-msg strong { font-size: 17px; }
+  .ov-msg[data-s="ok"] { border-color: var(--ok); }
+  .ov-msg[data-s="warn"] { border-color: var(--warn); }
+  .ov-msg[data-s="bad"] { border-color: var(--bad); }
+  .ov-msg[data-s="bad"] strong { color: var(--bad); }
+  .ov-msg[data-s="busy"] { border-color: var(--accent); }
+  .post { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .post li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; }
+  .post li::before { content: ""; width: 16px; height: 16px; margin-top: 4px; border-radius: 4px; border: 2px solid var(--line); }
+  .post li[data-done="true"]::before { background: var(--ok); border-color: var(--ok); }
+  .post li[data-done="true"] { color: var(--muted); text-decoration: line-through; }
+  .ov-log summary { cursor: pointer; color: var(--muted); }
+  .ov-log pre { margin: 8px 0 0; max-height: 180px; overflow: auto; background: var(--term-bg); color: var(--term-ink); border-radius: 8px; padding: 10px; font: 12px/1.5 var(--font-mono); white-space: pre-wrap; word-break: break-word; }
+
   @media (max-width: 860px) {
-    .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(320px, 1fr) auto; }
+    .workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(320px, 1fr) auto; }
+    .tabbar { flex-wrap: wrap; }
+    .field { min-width: 0; flex: 1 1 200px; }
+    .field select { flex: 1; min-width: 0; max-width: none; }
+    .chip { max-width: 100%; }
+    .brand { flex: 1 1 100%; flex-wrap: wrap; }
+    .wz-step { grid-template-columns: minmax(0, 1fr); }
     .editor-pane { border-right: 0; border-bottom: 1px solid var(--line); }
     .side { overflow: visible; }
     .dock { height: 40vh; }
@@ -156,15 +243,19 @@
 
 <header class="toolbar">
   <div class="brand"><b>Gate Controller IDE</b><span class="chip" id="fw-chip">กำลังโหลด…</span></div>
-  <button class="round" id="btn-build" type="button" title="บันทึกและคอมไพล์ (Ctrl+S)"><span class="ico">✓</span>คอมไพล์</button>
-  <button class="round primary" id="btn-upload" type="button" title="อัปโหลดลงบอร์ด (Ctrl+U)"><span class="ico">→</span>อัปโหลด</button>
-  <button class="round" id="btn-scan" type="button" title="สแกนสาย ไฟเลี้ยง และสถานะบอร์ด โดยไม่เขียนโปรแกรม"><span class="ico">◎</span>ตรวจบอร์ด</button>
-  <div class="field"><label for="board">บอร์ด</label><select id="board"></select></div>
-  <div class="field"><label for="port">พอร์ต</label><select id="port"></select></div>
-  <button class="round" id="btn-addport" type="button">เลือกพอร์ต…</button>
-  <button class="round" id="btn-porthelp" type="button" title="ไม่เจอพอร์ต? ดูวิธีแก้">?</button>
+  <div class="modes" role="group" aria-label="โหมดการใช้งาน">
+    <button type="button" id="mode-install" aria-pressed="true">ติดตั้ง</button>
+    <button type="button" id="mode-dev" aria-pressed="false">นักพัฒนา</button>
+  </div>
+  <div class="field dev-only"><label for="board">บอร์ด</label><select id="board"></select></div>
+  <div class="field dev-only"><label for="port">พอร์ต</label><select id="port"></select></div>
+  <button class="round dev-only" id="btn-addport" type="button">เลือกพอร์ต…</button>
+  <button class="round dev-only" id="btn-porthelp" type="button" title="ไม่เจอพอร์ต? ดูวิธีแก้">?</button>
+  <button class="round dev-only" id="btn-build" type="button" title="บันทึกและคอมไพล์ (Ctrl+S)"><span class="ico">✓</span>คอมไพล์</button>
+  <button class="round primary dev-only" id="btn-upload" type="button" title="อัปโหลดลงบอร์ด (Ctrl+U)"><span class="ico">→</span>อัปโหลด</button>
+  <button class="round dev-only" id="btn-scan" type="button" title="สแกนสาย ไฟเลี้ยง และสถานะบอร์ด โดยไม่เขียนโปรแกรม"><span class="ico">◎</span>ตรวจบอร์ด</button>
   <span class="spacer"></span>
-  <button class="round" id="btn-github" type="button">GitHub</button>
+  <button class="round dev-only" id="btn-github" type="button">GitHub</button>
 </header>
 
 <main class="workspace">
@@ -210,6 +301,85 @@
     </section>
   </aside>
 </main>
+
+<main id="installer" class="installer">
+  <div class="wz">
+    <header class="wz-head">
+      <h1>ติดตั้งโปรแกรมไม้กั้น</h1>
+      <p>ทำตาม 3 ขั้นตอนด้านล่าง ระบบจะตรวจไฟและสายให้ก่อนเขียนทุกครั้ง · เวอร์ชันที่จะติดตั้ง <b id="wz-ver">—</b></p>
+    </header>
+
+    <section class="wz-step" id="wz1">
+      <span class="num">1</span>
+      <div>
+        <h2>เสียบตัวแปลง USB เข้าคอมพิวเตอร์ แล้วเลือกพอร์ต</h2>
+        <p>กดปุ่ม แล้วเลือกรายการที่มีคำว่า USB, CH340, CP210x หรือ FTDI ในหน้าต่างที่เด้งขึ้น</p>
+        <div class="wz-row">
+          <button class="big primary" id="wz-port" type="button">เลือกพอร์ต</button>
+          <span class="wz-port-name" id="wz-port-name">ยังไม่ได้เลือก</span>
+          <button class="linkbtn" id="wz-porthelp" type="button">หาพอร์ตไม่เจอ?</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="wz-step" id="wz2">
+      <span class="num">2</span>
+      <div>
+        <h2>ต่อสายตามรูป</h2>
+        <p>ถ้าระบบตรวจเจอปัญหา สายเส้นที่ต้องเช็กจะกะพริบเป็นสีแดง</p>
+        <div class="wiring" id="wz-wiring"></div>
+        <div class="checks" id="wz-checks" style="margin-top:12px">
+          <label><input type="checkbox" id="wzc1"><span><b>ไฟ:</b> ขา <b>5V ของตัวแปลง</b> → ขา 5V ของบอร์ด (ไม่ใช่ 3V3 · ห้ามใช้ 12V)</span></label>
+          <label><input type="checkbox" id="wzc2"><span><b>สัญญาณ:</b> GND → GND, TXD → RX0, RXD → TX0 ครบตามรูป</span></label>
+          <label><input type="checkbox" id="wzc3"><span><b>IO0 → GND</b> ต่อแล้ว (ต่อก่อนเสียบไฟ ถ้าใช้บอร์ดโหลดแบบ auto ข้ามข้อนี้ได้)</span></label>
+        </div>
+      </div>
+    </section>
+
+    <section class="wz-step" id="wz3">
+      <span class="num">3</span>
+      <div>
+        <h2>ติดตั้งโปรแกรมลงบอร์ด</h2>
+        <p>ใช้เวลาราว 1 นาที ห้ามถอดสายระหว่างติดตั้ง</p>
+        <div class="wz-row">
+          <button class="big primary" id="wz-install" type="button" disabled>ติดตั้งลงบอร์ด</button>
+          <button class="round" id="wz-scan" type="button">ตรวจสายและไฟก่อน</button>
+        </div>
+        <div class="wz-status status" aria-live="polite"><span class="light" id="wz-light"></span><div><strong id="wz-title">ทำขั้นที่ 1 และ 2 ให้ครบก่อน</strong><span class="muted" id="wz-detail"></span></div></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<div class="ov" id="ov" hidden role="dialog" aria-modal="true" aria-labelledby="ov-title">
+  <div class="ov-card">
+    <h2 id="ov-title">กำลังติดตั้ง</h2>
+    <ol class="ov-stages" id="ov-stages">
+      <li data-st="check">ตรวจไฟและสาย</li>
+      <li data-st="connect">เชื่อมต่อบอร์ด</li>
+      <li data-st="write">เขียนโปรแกรม</li>
+      <li data-st="verify">ตรวจข้อมูล (MD5)</li>
+      <li data-st="done">เสร็จ</li>
+    </ol>
+    <div class="ov-big"><span id="ov-pct">0%</span><div class="meter"><div id="ov-bar"></div></div></div>
+    <div class="ov-msg" id="ov-msg" data-s="busy"><strong id="ov-msg-t">กำลังฟังบอร์ด…</strong><span id="ov-msg-d" class="muted"></span></div>
+    <div class="wiring" id="ov-wiring" hidden></div>
+    <div id="ov-post" hidden>
+      <h3 style="margin:0 0 8px">ขั้นต่อไป (ระบบติ๊กให้เองเมื่อเห็นจากบอร์ด)</h3>
+      <ul class="post">
+        <li id="post-io0">ถอดสายออกจากขา IO0 แล้วถอดไฟบอร์ดเสียบใหม่</li>
+        <li id="post-lan">เสียบสาย LAN แล้วรอบอร์ดรายงาน IP</li>
+      </ul>
+      <p class="muted" id="ov-hint" style="margin:8px 0 0"></p>
+      <a class="big primary" id="ov-open" target="_blank" rel="noopener" hidden style="margin-top:10px">เปิดหน้าควบคุมไม้กั้น</a>
+    </div>
+    <details class="ov-log"><summary>ข้อความจากบอร์ด</summary><pre id="ov-log"></pre></details>
+    <div class="dlg-actions">
+      <button class="round" id="ov-cancel" type="button">ยกเลิก</button>
+      <button class="round primary" id="ov-close" type="button" hidden>ปิด</button>
+    </div>
+  </div>
+</div>
 
 <section class="dock" aria-label="ผลลัพธ์และ Serial Monitor">
   <div class="dock-head">
@@ -337,12 +507,17 @@ function boardStatus(s, title, detail) {
   $("b-light").dataset.s = s || "";
   $("b-title").textContent = title;
   $("b-detail").textContent = detail || "";
+  // same message in the install wizard
+  $("wz-light").dataset.s = s || "";
+  $("wz-title").textContent = title;
+  $("wz-detail").textContent = detail ? " " + detail : "";
 }
 function setProgress(p) {
   const v = Math.max(0, Math.min(100, Math.round(p)));
   $("b-progress").hidden = false;
   $("b-bar").style.width = v + "%";
   $("b-pct").textContent = v + "%";
+  ovProgress(v);
 }
 
 /* ======================= Manifest & repo ======================= */
@@ -365,6 +540,7 @@ async function loadManifest() {
   $("fw-chip").textContent = `${manifest.name} · ${manifest.version}`;
   $("c-version").textContent = manifest.version;
   $("c-chips").textContent = Object.keys(manifest.builds).join(", ");
+  $("wz-ver").textContent = manifest.version;
   const board = $("board");
   const keep = board.value;
   board.innerHTML = "";
@@ -689,6 +865,7 @@ async function refreshPorts() {
     sel.append(o, pick);
     selectedPort = null;
     $("btn-addport").classList.add("primary");   // point beginners at the one thing to press
+    wizardRefresh();
     return;
   }
   $("btn-addport").classList.remove("primary");
@@ -702,10 +879,12 @@ async function refreshPorts() {
   const idx = selectedPort ? ports.indexOf(selectedPort) : -1;
   sel.value = String(idx >= 0 ? idx : 0);
   selectedPort = ports[Number(sel.value)];
+  wizardRefresh();
 }
 $("port").onchange = async () => {
   if ($("port").value === "__pick") { await addPort(); await refreshPorts(); return; }
   selectedPort = ports[Number($("port").value)] || null;
+  wizardRefresh();
 };
 async function addPort() {
   try {
@@ -759,6 +938,12 @@ const IP_LINE = /(?:browser|ที่ได้รับ)\s*:\s*(\d{1,3}(?:\.\d{1
 let mon = { running: false, reader: null, port: null, tail: "" };
 
 function serAppend(text) {
+  if (!$("ov").hidden) {
+    const log = $("ov-log");
+    log.textContent = (log.textContent + text).slice(-20000);
+    log.scrollTop = log.scrollHeight;
+  }
+  postWatch(text);
   serEl.textContent += text;
   if (serEl.textContent.length > 200000) serEl.textContent = serEl.textContent.slice(-150000);
   if ($("autoscroll").checked) serEl.scrollTop = serEl.scrollHeight;
@@ -965,11 +1150,19 @@ async function waitForBootloader(port) {
       await sleep(1000);
       port = await findSamePort(info, port);
     }
-    if (r.state === "ready") { boardStatus(...ADVICE.ready); out("ตรวจบอร์ด: พร้อมรับโปรแกรม", "o"); return port; }
+    if (r.state === "ready") {
+      boardStatus(...ADVICE.ready);
+      highlightWiring(null);
+      ovMsg("ok", "บอร์ดพร้อมรับโปรแกรม", "สายและไฟถูกต้อง");
+      out("ตรวจบอร์ด: พร้อมรับโปรแกรม", "o");
+      return port;
+    }
     if ((r.state === "running" || r.state === "silent" || r.state === "apploop") && !triedReset) { triedReset = true; await autoReset(port); continue; }
     const [s, title, detail] = ADVICE[r.state];
     const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
     boardStatus(s, title, `${detail}${r.resets ? ` (รีเซ็ต ${r.resets} ครั้งใน 1.5 วินาที)` : ""} · รออีก ${left} วินาที`);
+    ovMsg(s, title, `${detail} · ระบบรอให้แก้ อีก ${left} วินาที`);
+    highlightWiring(r.state);
     if (r.state !== last) { out(`ตรวจบอร์ด: ${title} — ${detail}`, s === "bad" ? "e" : "w"); last = r.state; }
     await sleep(200);
   }
@@ -1003,10 +1196,13 @@ function askSafety() {
 }
 
 let uploading = false;
-async function uploadFlow() {
+// opts.install: called from the install wizard - flash the published build as-is
+// (no compile, the wizard's wiring checks replace the checklist dialog).
+async function uploadFlow(opts = {}) {
   if (uploading) return;
+  const install = !!opts.install;
   if (!("serial" in navigator)) { out("เบราว์เซอร์นี้อัปโหลดไม่ได้ ใช้ Chrome หรือ Edge บนคอมพิวเตอร์", "e"); return; }
-  if (serverMode) {
+  if (serverMode && !install) {
     // Like Arduino IDE: Upload compiles the code in the editor first if it changed.
     const current = await sha256hex(cm.getValue());
     if (!manifest || manifest.codeHash !== current) {
@@ -1020,20 +1216,26 @@ async function uploadFlow() {
       if (!ok) return;
     }
   }
-  if (!manifest) { out("ยังไม่มีไฟล์โปรแกรมที่คอมไพล์แล้ว กด “คอมไพล์” ก่อน", "e"); return; }
-  if (!serverMode && cm.getValue() !== code.saved) out("หมายเหตุ: โค้ดที่แก้ยังไม่ได้คอมไพล์ จะอัปโหลดเวอร์ชันล่าสุดที่คอมไพล์แล้ว (" + manifest.version + ")", "w");
-  if (!(await askSafety())) return;
+  if (!manifest) {
+    boardStatus("bad", "ยังไม่มีโปรแกรมที่พร้อมติดตั้ง", "ให้ผู้ดูแลคอมไพล์ในโหมดนักพัฒนาก่อน");
+    out("ยังไม่มีไฟล์โปรแกรมที่คอมไพล์แล้ว กด “คอมไพล์” ก่อน", "e");
+    return;
+  }
+  if (!install && !serverMode && cm.getValue() !== code.saved) out("หมายเหตุ: โค้ดที่แก้ยังไม่ได้คอมไพล์ จะอัปโหลดเวอร์ชันล่าสุดที่คอมไพล์แล้ว (" + manifest.version + ")", "w");
+  if (!install && !(await askSafety())) return;
   let port = await needPort();
   if (!port) return;
 
   uploading = true;
   cancelUpload = false;
-  $("btn-upload").disabled = true;
+  for (const id of ["btn-upload", "wz-install", "wz-scan"]) $(id).disabled = true;
   $("btn-cancel").hidden = false;
   $("b-progress").hidden = true;
   $("b-ip").hidden = true;
   showTab("out");
   out("── อัปโหลด ──────────────────────────");
+  ovOpen(install ? "กำลังติดตั้งโปรแกรมไม้กั้น" : "กำลังอัปโหลด");
+  ovStage("check");
   await monitorStop();
 
   let transport = null;
@@ -1041,22 +1243,34 @@ async function uploadFlow() {
   try {
     boardStatus("busy", "กำลังตรวจบอร์ด", "ฟังเสียงตอบจากบอร์ด…");
     port = await waitForBootloader(port);
-    if (!port) return;
+    if (!port) {
+      ovStage("check", "error");
+      ovMsg("bad", $("b-title").textContent, $("b-detail").textContent);
+      return;
+    }
     selectedPort = port;
     $("btn-cancel").hidden = true;
+    $("ov-cancel").hidden = true;
+    ovStage("check", "done");
+    ovStage("connect");
 
     transport = new Transport(port, false);
     const loader = new ESPLoader({ transport, baudrate: FLASH_BAUD, terminal, debugLogging: false });
     boardStatus("busy", "เชื่อมต่อบอร์ด", "");
+    ovMsg("busy", "กำลังเชื่อมต่อบอร์ด", "");
     await loader.main("no_reset");
     const chip = loader.chip.CHIP_NAME;
     const want = $("board").value;
     out(`ชิปที่พบ: ${chip}`);
     if (chip !== want || !manifest.builds[chip]) {
       boardStatus("bad", `ชิปไม่ตรง: พบ ${chip}`, `เลือกบอร์ดไว้เป็น ${want} — ไม่เขียนโปรแกรม เพื่อกันบอร์ดเสีย`);
+      ovStage("connect", "error");
+      ovMsg("bad", `ชิปไม่ตรง: พบ ${chip}`, `โปรแกรมนี้สำหรับ ${want} — ไม่เขียน เพื่อกันบอร์ดเสีย`);
       out(`หยุด: บอร์ดที่ต่อเป็น ${chip} แต่เลือกไว้เป็น ${want}`, "e");
       return;
     }
+    ovStage("connect", "done");
+    ovStage("write");
 
     const fileArray = [];
     for (const part of manifest.builds[chip].parts) {
@@ -1067,6 +1281,7 @@ async function uploadFlow() {
     const sizes = fileArray.map((f) => f.data.length);
     const grand = sizes.reduce((a, b) => a + b, 0);
     boardStatus("busy", "กำลังเขียนโปรแกรม", "ห้ามถอดสายหรือไฟ");
+    ovMsg("busy", "กำลังเขียนโปรแกรม — ห้ามถอดสายหรือไฟ", `${(grand / 1024).toFixed(0)} KB · ไม่ลบค่า IP ที่บันทึกในบอร์ด`);
     out(`เขียน ${fileArray.length} ส่วน (${(grand / 1024).toFixed(0)} KB) ข้ามพื้นที่เก็บค่า IP`);
     await loader.writeFlash({
       fileArray,
@@ -1080,36 +1295,50 @@ async function uploadFlow() {
       calculateMD5Hash: (image) => CryptoJS.MD5(CryptoJS.lib.WordArray.create(image)).toString(),
     });
     setProgress(100);
+    ovStage("write", "done");
+    ovStage("verify", "done");
+    ovStage("done", "done");
     out("✓ เขียนเสร็จ และตรวจ MD5 ตรงกับไฟล์ทุกส่วน", "o");
     await loader.after("hard_reset");
     ok = true;
-    boardStatus("ok", "อัปโหลดสำเร็จ", "ถอด IO0 ออกจาก GND แล้วถอดไฟบอร์ดเสียบใหม่ — Serial Monitor จะแสดงข้อความและ IP");
+    boardStatus("ok", "ติดตั้งสำเร็จ", "ถอด IO0 ออกจาก GND แล้วถอดไฟบอร์ดเสียบใหม่ แล้วเสียบสาย LAN");
+    ovMsg("ok", "ติดตั้งสำเร็จ", "ข้อมูลในบอร์ดตรงกับไฟล์ทุกส่วน (ตรวจ MD5 แล้ว)");
+    $("ov-post").hidden = false;
+    post.active = true;
     out("ขั้นต่อไป: ถอด IO0 ออกจาก GND แล้วถอดไฟบอร์ดเสียบใหม่ เปิด Serial Monitor ให้แล้ว", "o");
   } catch (e) {
     console.error(e);
     const m = String(e && (e.message || e));
+    let title, detail;
     if (/MD5/i.test(m)) {
-      boardStatus("bad", "ตรวจหลังเขียนไม่ตรง", "ห้ามนำบอร์ดไปใช้ กดอัปโหลดใหม่ ถ้ายังไม่ตรงให้ตรวจไฟเลี้ยง");
+      [title, detail] = ["ตรวจหลังเขียนไม่ตรง", "ห้ามนำบอร์ดไปใช้ กดติดตั้งใหม่ ถ้ายังไม่ตรงให้ตรวจไฟเลี้ยง"];
       out("ERROR: ข้อมูลในบอร์ดไม่ตรงกับไฟล์ (" + m + ")", "e");
     } else if (/open/i.test(m)) {
-      boardStatus("bad", "พอร์ตถูกใช้อยู่", "ปิด Arduino IDE / Serial Monitor อื่น หรือแท็บอื่นที่เปิดหน้านี้");
+      [title, detail] = ["พอร์ตถูกใช้อยู่", "ปิด Arduino IDE / Serial Monitor อื่น หรือแท็บอื่นที่เปิดหน้านี้"];
       out("ERROR: " + m, "e");
     } else if (/lost|disconnect/i.test(m)) {
-      boardStatus("bad", "สายหลุดระหว่างเขียน", "เสียบให้แน่นแล้วอัปโหลดใหม่ บอร์ดไม่เสียหาย เขียนซ้ำได้");
+      [title, detail] = ["สายหลุดระหว่างเขียน", "เสียบให้แน่นแล้วติดตั้งใหม่ บอร์ดไม่เสียหาย เขียนซ้ำได้"];
+      highlightWiring("power");
       out("ERROR: " + m, "e");
     } else {
-      boardStatus("bad", "อัปโหลดไม่สำเร็จ", "ดูรายละเอียดในหน้าต่างผลลัพธ์ แล้วลองใหม่ได้ บอร์ดไม่เสียหาย");
+      [title, detail] = ["ติดตั้งไม่สำเร็จ", "ลองใหม่ได้ บอร์ดไม่เสียหาย · รายละเอียด: " + m];
       out("ERROR: " + m, "e");
     }
+    boardStatus("bad", title, detail);
+    if (ovStageNow) ovStage(ovStageNow, "error");
+    ovMsg("bad", title, detail);
   } finally {
     try { if (transport) await transport.disconnect(); } catch {}
     uploading = false;
-    $("btn-upload").disabled = false;
+    for (const id of ["btn-upload", "wz-scan"]) $(id).disabled = false;
     $("btn-cancel").hidden = true;
+    ovFinish();
+    wzHold = true;
+    wizardRefresh();
   }
-  if (ok) { $("baud").value = "115200"; monitorStart(port); }
+  if (ok) { $("baud").value = "115200"; monitorStart(port); if (mode === "install") showTab("ser"); }
 }
-$("btn-upload").onclick = uploadFlow;
+$("btn-upload").onclick = () => uploadFlow();
 
 /* ======================= Check board only (no writing) ======================= */
 // Listens for up to 30 s and reports wiring, power and what the board is doing.
@@ -1121,9 +1350,10 @@ async function scanFlow() {
   if (!port) return;
   uploading = true;
   cancelUpload = false;
-  for (const id of ["btn-upload", "btn-scan", "btn-build"]) $(id).disabled = true;
+  for (const id of ["btn-upload", "btn-scan", "btn-build", "wz-scan", "wz-install"]) $(id).disabled = true;
   $("btn-cancel").hidden = false;
   $("b-progress").hidden = true;
+  wzHold = true;
   showTab("out");
   out("── ตรวจบอร์ด (ไม่เขียนโปรแกรม) ──────────────");
   out("ระหว่างตรวจ 30 วินาที: ถอดไฟบอร์ดแล้วเสียบใหม่ 1 ครั้ง ให้บอร์ดส่งข้อความตอนบูตออกมา", "w");
@@ -1154,12 +1384,14 @@ async function scanFlow() {
     }
   } finally {
     uploading = false;
-    for (const id of ["btn-upload", "btn-scan", "btn-build"]) $(id).disabled = false;
+    for (const id of ["btn-upload", "btn-scan", "btn-build", "wz-scan"]) $(id).disabled = false;
     $("btn-cancel").hidden = true;
+    wizardRefresh();
   }
 
   if (cancelUpload) { boardStatus("", "ยกเลิกการตรวจแล้ว", ""); return; }
   const r = final || { state: "silent" };
+  highlightWiring(r.state === "running" && !r.ip && !r.firmware ? null : r.state);
   if (r.state === "ready") {
     boardStatus("ok", "สายและไฟถูกต้อง · พร้อมอัปโหลด", "บอร์ดอยู่ในโหมดรับโปรแกรม (IO0 ต่อ GND) และตอบคำสั่งได้");
     out("✓ ผลตรวจ: สาย TX/RX, GND และไฟเลี้ยงถูกต้อง บอร์ดพร้อมรับโปรแกรม", "o");
@@ -1182,6 +1414,158 @@ async function scanFlow() {
 }
 $("btn-scan").onclick = scanFlow;
 
+/* ======================= Wiring diagram ======================= */
+// USB-TTL adapter on the left, WT32-ETH01 on the right. Each wire is a
+// <g data-wire> so a detected problem can make the wires to check blink red.
+const WIRING_SVG = `
+<svg viewBox="0 0 660 330" role="img" aria-label="ผังต่อสายตัวแปลง USB กับบอร์ด WT32-ETH01">
+  <rect class="box" x="14" y="34" width="190" height="250" rx="12"/>
+  <text class="title" x="109" y="24" text-anchor="middle">ตัวแปลง USB-TTL</text>
+  <rect class="box" x="456" y="34" width="190" height="282" rx="12"/>
+  <text class="title" x="551" y="24" text-anchor="middle">บอร์ด WT32-ETH01</text>
+  <text class="note" x="30" y="300">เสียบ USB เข้าคอมพิวเตอร์</text>
+  ${[["5V", 80], ["GND", 130], ["TXD", 180], ["RXD", 230]].map(([n, y]) =>
+    `<rect class="pin" x="174" y="${y - 12}" width="30" height="24" rx="4"/><text class="pinlabel" x="164" y="${y + 5}" text-anchor="end">${n}</text>`).join("")}
+  ${[["5V", 80], ["GND", 130], ["RX0", 180], ["TX0", 230], ["IO0", 280]].map(([n, y]) =>
+    `<rect class="pin" x="456" y="${y - 12}" width="30" height="24" rx="4"/><text class="pinlabel" x="496" y="${y + 5}">${n}</text>`).join("")}
+  <g data-wire="5v"><path d="M204 80 H456"/><text class="wirelabel" x="330" y="70" text-anchor="middle">5V → 5V (ห้าม 12V)</text></g>
+  <g data-wire="gnd"><path d="M204 130 H456"/><text class="wirelabel" x="330" y="120" text-anchor="middle">GND → GND</text></g>
+  <g data-wire="tx"><path d="M204 180 H456"/><text class="wirelabel" x="330" y="170" text-anchor="middle">TXD → RX0</text></g>
+  <g data-wire="rx"><path d="M204 230 H456"/><text class="wirelabel" x="330" y="220" text-anchor="middle">RXD → TX0</text></g>
+  <g data-wire="io0"><path d="M456 280 H420 V130"/><text class="wirelabel" x="412" y="300" text-anchor="end">IO0 → GND เฉพาะตอนติดตั้ง</text></g>
+</svg>`;
+for (const id of ["wz-wiring", "ov-wiring"]) $(id).innerHTML = WIRING_SVG;
+
+// Which wires to check for each board-check result
+const WIRES_FOR = {
+  power: ["5v", "gnd"],
+  echo: ["tx", "rx", "gnd"],
+  nosync: ["tx"],
+  silent: ["rx", "gnd", "io0"],
+  running: ["io0"],
+  apploop: ["io0"],
+};
+function highlightWiring(state) {
+  const bad = WIRES_FOR[state] || [];
+  for (const box of document.querySelectorAll(".wiring")) {
+    box.classList.toggle("has-bad", bad.length > 0);
+    for (const g of box.querySelectorAll("[data-wire]")) g.classList.toggle("bad", bad.includes(g.dataset.wire));
+  }
+  $("ov-wiring").hidden = bad.length === 0;
+}
+
+/* ======================= Modes ======================= */
+let mode = store.get("ide_mode") === "dev" ? "dev" : "install";
+function setMode(m) {
+  mode = m;
+  document.body.dataset.mode = m;
+  store.set("ide_mode", m);
+  $("mode-install").setAttribute("aria-pressed", String(m === "install"));
+  $("mode-dev").setAttribute("aria-pressed", String(m === "dev"));
+  if (m === "dev") setTimeout(() => cm.refresh(), 0);
+}
+$("mode-install").onclick = () => setMode("install");
+$("mode-dev").onclick = () => setMode("dev");
+
+/* ======================= Install wizard ======================= */
+let wzHold = false; // true while the status box shows a check/install result
+function wzStatus(s, title, detail) {
+  $("wz-light").dataset.s = s || "";
+  $("wz-title").textContent = title;
+  $("wz-detail").textContent = detail ? " " + detail : "";
+}
+function wizardRefresh() {
+  const hasPort = !!selectedPort;
+  $("wz-port-name").textContent = hasPort ? `✓ ${portLabel(selectedPort, ports.indexOf(selectedPort))}` : "ยังไม่ได้เลือก";
+  $("wz-port").textContent = hasPort ? "เปลี่ยนพอร์ต" : "เลือกพอร์ต";
+  $("wz-port").classList.toggle("primary", !hasPort);
+  $("wz1").dataset.done = String(hasPort);
+  const wired = ["wzc1", "wzc2", "wzc3"].every((id) => $(id).checked);
+  $("wz2").dataset.done = String(wired);
+  const can = hasPort && wired && !!manifest && "serial" in navigator && !uploading;
+  $("wz-install").disabled = !can;
+  if (!("serial" in navigator)) {
+    $("wz-install").textContent = "ใช้คอมพิวเตอร์ (Chrome / Edge)";
+  }
+  if (!uploading && !wzHold) {
+    if (!manifest) wzStatus("warn", "ยังไม่มีโปรแกรมที่พร้อมติดตั้ง", "ให้ผู้ดูแลคอมไพล์ในโหมดนักพัฒนาก่อน");
+    else if (!hasPort) wzStatus("", "ทำขั้นที่ 1: เลือกพอร์ต", "");
+    else if (!wired) wzStatus("", "ทำขั้นที่ 2: ต่อสายแล้วติ๊กให้ครบ", "");
+    else wzStatus("ok", "พร้อมติดตั้ง", "กด “ติดตั้งลงบอร์ด”");
+  }
+}
+for (const id of ["wzc1", "wzc2", "wzc3"]) $(id).addEventListener("change", () => { wzHold = false; highlightWiring(null); wizardRefresh(); });
+$("wz-port").onclick = async () => { wzHold = false; await addPort(); wizardRefresh(); };
+$("wz-porthelp").onclick = () => showPortHelp();
+$("wz-scan").onclick = () => scanFlow();
+$("wz-install").onclick = () => uploadFlow({ install: true });
+
+/* ======================= Full-screen progress ======================= */
+let ovStageNow = null;
+const post = { active: false, booted: false, ip: null, tail: "" };
+function ovOpen(title) {
+  $("ov-title").textContent = title;
+  for (const li of $("ov-stages").children) delete li.dataset.state;
+  ovProgress(0);
+  ovMsg("busy", "กำลังฟังบอร์ด…", "");
+  $("ov-cancel").hidden = false;
+  $("ov-close").hidden = true;
+  $("ov-post").hidden = true;
+  $("ov-open").hidden = true;
+  $("ov-hint").textContent = "";
+  $("ov-log").textContent = "";
+  for (const id of ["post-io0", "post-lan"]) delete $(id).dataset.done;
+  Object.assign(post, { active: false, booted: false, ip: null, tail: "" });
+  highlightWiring(null);
+  $("ov").hidden = false;
+}
+function ovStage(name, state = "active") {
+  const li = $("ov-stages").querySelector(`[data-st="${name}"]`);
+  if (li) li.dataset.state = state;
+  if (state === "active") ovStageNow = name;
+}
+function ovMsg(s, title, detail) {
+  $("ov-msg").dataset.s = s || "";
+  $("ov-msg-t").textContent = title;
+  $("ov-msg-d").textContent = detail || "";
+}
+function ovProgress(p) {
+  const v = Math.max(0, Math.min(100, Math.round(p)));
+  $("ov-pct").textContent = v + "%";
+  $("ov-bar").style.width = v + "%";
+}
+function ovFinish() { $("ov-cancel").hidden = true; $("ov-close").hidden = false; }
+$("ov-cancel").onclick = () => { cancelUpload = true; ovMsg("warn", "กำลังยกเลิก…", ""); };
+$("ov-close").onclick = () => { $("ov").hidden = true; post.active = false; highlightWiring(null); wizardRefresh(); };
+
+// After a successful install: tick the next steps from what the board prints.
+function postWatch(text) {
+  if (!post.active) return;
+  post.tail = (post.tail + text).slice(-4000);
+  if (/\(DOWNLOAD|waiting for download/.test(text)) {
+    $("ov-hint").textContent = "บอร์ดยังอยู่ในโหมดรับโปรแกรม: ถอดสายออกจากขา IO0 แล้วถอดไฟเสียบใหม่";
+  }
+  if (!post.booted && /SPI_FAST_FLASH_BOOT|📌|entry 0x/.test(post.tail) && !/\(DOWNLOAD/.test(text)) {
+    post.booted = true;
+    $("post-io0").dataset.done = "true";
+    $("ov-hint").textContent = "บอร์ดเริ่มทำงานแล้ว — เสียบสาย LAN";
+  }
+  if ((post.tail.match(/ets Jul 29/g) || []).length >= 3 && !post.ip) {
+    $("ov-hint").textContent = "บอร์ดรีสตาร์ทวน: ตรวจไฟเลี้ยง (ใช้ขา 5V ไม่ใช่ 3V3) และไม่มีสายค้างที่ขา IO0";
+  }
+  const m = post.tail.match(IP_LINE);
+  if (m && m[1] !== "0.0.0.0" && post.ip !== m[1]) {
+    post.ip = m[1];
+    $("post-io0").dataset.done = "true";
+    $("post-lan").dataset.done = "true";
+    $("ov-open").href = `http://${m[1]}/`;
+    $("ov-open").textContent = `เปิดหน้าควบคุมไม้กั้น (${m[1]})`;
+    $("ov-open").hidden = false;
+    $("ov-hint").textContent = "เสร็จเรียบร้อย ✓";
+    ovMsg("ok", "ติดตั้งและเชื่อมต่อ LAN สำเร็จ", `บอร์ดได้ IP ${m[1]}`);
+  }
+}
+
 /* ======================= Shortcuts & start ======================= */
 window.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey)) return;
@@ -1201,6 +1585,7 @@ if (!("serial" in navigator)) {
   refreshPorts();
 }
 
+setMode(mode);
 serverMode = await detectServer();
 if (serverMode) {
   $("btn-build").innerHTML = '<span class="ico">✓</span>ตรวจโค้ด';
@@ -1215,6 +1600,7 @@ try {
   repo = guessRepo();
   buildStatus("warn", "ยังไม่มีไฟล์ที่คอมไพล์แล้ว", serverMode ? "กด “อัปโหลด” ระบบจะคอมไพล์ให้ก่อน" : "กด “คอมไพล์” ก่อน");
 }
+wizardRefresh();
 loadCode();
 out(serverMode
   ? "พร้อมใช้งาน (เซิร์ฟเวอร์คอมไพล์ในเครื่อง) · Ctrl+R = ตรวจโค้ด · Ctrl+U = คอมไพล์และอัปโหลด"
