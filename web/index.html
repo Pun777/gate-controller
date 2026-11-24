@@ -161,7 +161,8 @@
   <button class="round" id="btn-scan" type="button" title="สแกนสาย ไฟเลี้ยง และสถานะบอร์ด โดยไม่เขียนโปรแกรม"><span class="ico">◎</span>ตรวจบอร์ด</button>
   <div class="field"><label for="board">บอร์ด</label><select id="board"></select></div>
   <div class="field"><label for="port">พอร์ต</label><select id="port"></select></div>
-  <button class="round" id="btn-addport" type="button">+ เพิ่มพอร์ต</button>
+  <button class="round" id="btn-addport" type="button">เลือกพอร์ต…</button>
+  <button class="round" id="btn-porthelp" type="button" title="ไม่เจอพอร์ต? ดูวิธีแก้">?</button>
   <span class="spacer"></span>
   <button class="round" id="btn-github" type="button">GitHub</button>
 </header>
@@ -200,6 +201,7 @@
       <h2>กันบอร์ดพัง</h2>
       <ul class="rules">
         <li>ไฟเลี้ยง <b>5V เท่านั้น</b> ห้ามต่อ 12V/24V เข้าขา 5V</li>
+        <li>ไฟจากตัวแปลง: ใช้ขา <b>5V</b> ไม่ใช่ 3V3 (3V3 จ่ายไฟไม่พอ ทำให้บอร์ดรีเซ็ตวน)</li>
         <li>ใช้ไฟแยก: <b>ถอด VCC ของตัวแปลง</b> และต่อ <b>GND ร่วม</b></li>
         <li>ระบบตรวจไฟตกและสายผิดก่อนเขียนทุกครั้ง และเช็ก MD5 หลังเขียน</li>
         <li>ค่า IP ในบอร์ดไม่ถูกลบตอนอัปโหลด</li>
@@ -243,6 +245,28 @@
     <div class="dlg-actions">
       <button class="round" value="cancel" type="submit">ยกเลิก</button>
       <button class="round primary" id="safety-ok" value="ok" type="submit" disabled>เริ่มอัปโหลด</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-porthelp">
+  <form method="dialog" class="dlg">
+    <h3>ไม่เจอพอร์ตของบอร์ด</h3>
+    <p class="muted">หน้าเว็บมองไม่เห็นพอร์ตเองเหมือน Arduino IDE ต้องกด “เลือกพอร์ต…” แล้วเลือกจากหน้าต่างของเบราว์เซอร์ ถ้าในหน้าต่างไม่มีรายการ ให้เช็กตามนี้</p>
+    <ol class="rules">
+      <li><b>ใช้ Chrome หรือ Edge บนคอมพิวเตอร์</b> (มือถือ, Firefox, Safari ใช้ไม่ได้)</li>
+      <li><b>เสียบตัวแปลง USB เข้าคอมพิวเตอร์</b> ไฟบนตัวแปลงควรติด ลองเปลี่ยนช่อง USB</li>
+      <li><b>เปลี่ยนสาย USB</b> สายชาร์จมือถือบางเส้นส่งข้อมูลไม่ได้</li>
+      <li><b>ติดตั้งไดรเวอร์</b> ตามชิปบนตัวแปลง แล้วถอดเสียบใหม่:
+        <a href="https://www.wch-ic.com/downloads/CH341SER_EXE.html" target="_blank" rel="noopener">CH340 / CH341</a> ·
+        <a href="https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers" target="_blank" rel="noopener">CP2102 / CP210x</a> ·
+        <a href="https://ftdichip.com/drivers/vcp-drivers/" target="_blank" rel="noopener">FTDI</a></li>
+      <li><b>เช็กใน Device Manager</b> (คลิกขวาปุ่ม Start → Device Manager → Ports (COM &amp; LPT)) ต้องเห็น เช่น “USB-SERIAL CH340 (COM5)” ถ้ามีเครื่องหมาย ! แปลว่าไดรเวอร์ยังไม่ถูก</li>
+      <li>ในหน้าต่างเลือกพอร์ต เลือกรายการที่มีคำว่า <b>USB, CH340, CP210x หรือ FTDI</b> อย่าเลือก Bluetooth</li>
+    </ol>
+    <div class="dlg-actions">
+      <button class="round" value="close" type="submit">ปิด</button>
+      <button class="round primary" value="retry" type="submit">ลองเลือกพอร์ตอีกครั้ง</button>
     </div>
   </form>
 </dialog>
@@ -655,38 +679,78 @@ async function refreshPorts() {
   ports = await navigator.serial.getPorts();
   const sel = $("port");
   sel.innerHTML = "";
+  const pick = document.createElement("option");
+  pick.value = "__pick";
+  pick.textContent = "+ เลือกพอร์ตใหม่…";
   if (!ports.length) {
     const o = document.createElement("option");
-    o.textContent = "ยังไม่ได้เลือก — กด “+ เพิ่มพอร์ต”";
+    o.textContent = "ยังไม่ได้เลือกพอร์ต";
     o.value = "";
-    sel.append(o);
+    sel.append(o, pick);
     selectedPort = null;
+    $("btn-addport").classList.add("primary");   // point beginners at the one thing to press
     return;
   }
+  $("btn-addport").classList.remove("primary");
   ports.forEach((p, i) => {
     const o = document.createElement("option");
     o.value = String(i);
     o.textContent = portLabel(p, i);
     sel.append(o);
   });
+  sel.append(pick);
   const idx = selectedPort ? ports.indexOf(selectedPort) : -1;
   sel.value = String(idx >= 0 ? idx : 0);
   selectedPort = ports[Number(sel.value)];
 }
-$("port").onchange = () => { selectedPort = ports[Number($("port").value)] || null; };
+$("port").onchange = async () => {
+  if ($("port").value === "__pick") { await addPort(); await refreshPorts(); return; }
+  selectedPort = ports[Number($("port").value)] || null;
+};
 async function addPort() {
   try {
     const p = await navigator.serial.requestPort();
     selectedPort = p;
     await refreshPorts();
-    out(`เลือกพอร์ต ${portLabel(p, ports.indexOf(p))} แล้ว`);
+    out(`เลือกพอร์ต ${portLabel(p, ports.indexOf(p))} แล้ว`, "o");
     return p;
   } catch (e) {
-    if (e.name !== "NotFoundError") out("เลือกพอร์ตไม่ได้: " + e.message, "e");
+    if (e.name === "NotFoundError") {
+      // Closed the picker: usually because the adapter wasn't in the list.
+      out("ยังไม่ได้เลือกพอร์ต — ถ้าในหน้าต่างไม่มีรายการ ดูวิธีแก้ที่ปุ่ม “?”", "w");
+      showPortHelp();
+    } else {
+      out("เลือกพอร์ตไม่ได้: " + e.message, "e");
+    }
     return null;
   }
 }
 $("btn-addport").onclick = addPort;
+
+function showPortHelp() {
+  const dlg = $("dlg-porthelp");
+  if (dlg.open) return;
+  dlg.addEventListener("close", () => { if (dlg.returnValue === "retry") addPort(); }, { once: true });
+  dlg.showModal();
+}
+$("btn-porthelp").onclick = showPortHelp;
+
+// Plugging in an adapter that was approved before selects it straight away,
+// like Arduino IDE picking up a new port.
+async function onPortConnected(e) {
+  await refreshPorts();
+  const p = e.target;
+  if (p && ports.includes(p) && !uploading && !mon.running) {
+    selectedPort = p;
+    $("port").value = String(ports.indexOf(p));
+    out(`เจอตัวแปลง USB ที่เสียบใหม่: ${portLabel(p, ports.indexOf(p))} — เลือกให้แล้ว`, "o");
+  }
+}
+async function onPortDisconnected(e) {
+  const wasSelected = e.target === selectedPort;
+  await refreshPorts();
+  if (wasSelected) out("ตัวแปลง USB ถูกถอดออก — เสียบกลับแล้วระบบจะเลือกให้เอง", "w");
+}
 async function needPort() { return selectedPort || (await addPort()); }
 
 /* ======================= Serial Monitor ======================= */
@@ -789,7 +853,18 @@ function classify(buf) {
   const text = String.fromCharCode(...buf.subarray(0, 20000));
   const resets = (text.match(/ets Jul 29/g) || []).length;
   if (indexOfSeq(buf, [0xc0, 0x01, 0x08]) >= 0) return { state: "ready" };
-  if (/Brownout|BOD/.test(text) || resets >= 3) return { state: "power", resets };
+  if (/Brownout detector|BROWN_OUT|\bBOD\b/.test(text)) return { state: "power", resets };
+  if (resets >= 3) {
+    // Several resets in a row. If the chip got far enough to start the old
+    // program (normal boot, boot:0x13...) it is that program rebooting, which a
+    // new upload fixes. Resets in download mode, or cut off before the boot mode
+    // is even printed, mean the supply collapses: a real power problem.
+    const appBoots = (text.match(/boot:0x1[0-9a-f] \(SPI_FAST_FLASH_BOOT/g) || []).length;
+    const dlBoots = (text.match(/boot:0x[0-9a-f]+ \(DOWNLOAD/g) || []).length;
+    const appRunning = /entry 0x[0-9a-f]+/.test(text);
+    if (appBoots >= 1 && dlBoots === 0 && appRunning) return { state: "apploop", resets };
+    return { state: "power", resets };
+  }
   if (/waiting for download|\(DOWNLOAD/.test(text)) return { state: "nosync" };
   if (countSeq(buf, [0x07, 0x07, 0x12, 0x20, 0x55, 0x55]) >= 2) return { state: "echo" };
   if (!buf.length) return { state: "silent" };
@@ -853,7 +928,8 @@ async function autoReset(port) {
 
 const ADVICE = {
   ready:   ["ok",   "บอร์ดพร้อมรับโปรแกรม", ""],
-  power:   ["bad",  "ไฟเลี้ยงไม่พอ — หยุดรอก่อน", "บอร์ดรีเซ็ตวนเพราะไฟตก ใช้แหล่งจ่าย 5V ที่จ่ายได้อย่างน้อย 1A (ไฟจากขา VCC ของตัวแปลงมักไม่พอ) ห้ามใช้ 12V เข้าขา 5V"],
+  power:   ["bad",  "ไฟเลี้ยงไม่พอ — ระบบรอก่อน ยังไม่เขียน", "ย้ายสายไฟของตัวแปลงไปที่ขาที่เขียนว่า 5V (ไฟจาก USB ตรง) เข้าขา 5V ของบอร์ด อย่าใช้ขา 3V3 หรือ VCC ที่ตั้งจัมเปอร์ 3.3V หรือใช้ที่ชาร์จมือถือ 5V แล้วต่อ GND ร่วม ห้ามใช้ 12V เข้าขา 5V"],
+  apploop: ["warn", "โปรแกรมเดิมในบอร์ดรีสตาร์ทวน", "ไม่ใช่ปัญหาของการเขียน: ต่อ IO0 ลง GND แล้วถอดไฟบอร์ดเสียบใหม่ ระบบจะเขียนโปรแกรมใหม่ทับให้ (ถ้ายังวนในโหมดรับโปรแกรม แปลว่าไฟไม่พอ)"],
   echo:    ["warn", "สายสัญญาณผิด", "ข้อมูลสะท้อนกลับ: สาย TX กับ RX แตะกัน หรือ GND ของตัวแปลงกับบอร์ดไม่ได้ต่อร่วม"],
   nosync:  ["warn", "บอร์ดเข้าโหมดรับโปรแกรมแล้ว แต่ไม่ได้ยินคำสั่ง", "ต่อสาย TX ของตัวแปลง → ขา RXD ของบอร์ด"],
   running: ["warn", "บอร์ดกำลังรันโปรแกรมเดิม", "ต่อ IO0 ลง GND แล้วถอดไฟบอร์ดเสียบใหม่ตอนนี้ ระบบจะเริ่มเขียนเองเมื่อพร้อม"],
@@ -890,7 +966,7 @@ async function waitForBootloader(port) {
       port = await findSamePort(info, port);
     }
     if (r.state === "ready") { boardStatus(...ADVICE.ready); out("ตรวจบอร์ด: พร้อมรับโปรแกรม", "o"); return port; }
-    if ((r.state === "running" || r.state === "silent") && !triedReset) { triedReset = true; await autoReset(port); continue; }
+    if ((r.state === "running" || r.state === "silent" || r.state === "apploop") && !triedReset) { triedReset = true; await autoReset(port); continue; }
     const [s, title, detail] = ADVICE[r.state];
     const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
     boardStatus(s, title, `${detail}${r.resets ? ` (รีเซ็ต ${r.resets} ครั้งใน 1.5 วินาที)` : ""} · รออีก ${left} วินาที`);
@@ -903,7 +979,7 @@ async function waitForBootloader(port) {
 
 /* ======================= Upload ======================= */
 const SAFETY_ITEMS = [
-  "ไฟเลี้ยงบอร์ดเป็น <b>5V</b> (ไม่ใช่ 12V/24V) และต่อขั้ว + เข้าขา 5V, − เข้า GND",
+  "ไฟเลี้ยงบอร์ดเป็น <b>5V</b> (ไม่ใช่ 12V/24V) เข้าขา 5V ของบอร์ด: ใช้ขา <b>5V ของตัวแปลง</b> (ไฟจาก USB) หรือที่ชาร์จมือถือ 5V — <b>ไม่ใช้ขา 3V3</b> เพราะจ่ายไฟไม่พอ",
   "ถ้าใช้แหล่งจ่ายไฟแยก: <b>ถอดสาย VCC ของตัวแปลง USB</b> ออก และต่อ <b>GND ร่วมกันทั้งหมด</b>",
   "สาย TX ของตัวแปลง → <b>RXD</b> ของบอร์ด และ RX → <b>TXD</b>",
 ];
@@ -1120,8 +1196,8 @@ if (!("serial" in navigator)) {
   $("btn-addport").disabled = true;
   $("btn-scan").disabled = true;
 } else {
-  navigator.serial.addEventListener("connect", refreshPorts);
-  navigator.serial.addEventListener("disconnect", refreshPorts);
+  navigator.serial.addEventListener("connect", onPortConnected);
+  navigator.serial.addEventListener("disconnect", onPortDisconnected);
   refreshPorts();
 }
 
