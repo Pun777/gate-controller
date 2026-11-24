@@ -224,6 +224,38 @@
   .ov-log summary { cursor: pointer; color: var(--muted); }
   .ov-log pre { margin: 8px 0 0; max-height: 180px; overflow: auto; background: var(--term-bg); color: var(--term-ink); border-radius: 8px; padding: 10px; font: 12px/1.5 var(--font-mono); white-space: pre-wrap; word-break: break-word; }
 
+  /* ---------- IP setting, LAN update, reports ---------- */
+  .ipbox { display: grid; gap: 8px; margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+  .ipopt { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .ipopt input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; }
+  .iprow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding-left: 26px; }
+  .iprow label { display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
+  .ipbox[data-keep="true"] .iprow { opacity: .45; pointer-events: none; }
+  .txt { font: 16px var(--font-mono); padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); min-width: 0; width: 100%; max-width: 220px; box-sizing: border-box; }
+  .txt[aria-invalid="true"] { border-color: var(--bad); }
+  textarea.txt { max-width: none; font-family: var(--font-body); min-height: 70px; resize: vertical; }
+  .dlg label { display: grid; gap: 4px; }
+  .ipnote { font-size: 13px; color: var(--muted); }
+  .ipnote[data-s="bad"] { color: var(--bad); font-weight: 600; }
+  .ipnote[data-s="ok"] { color: var(--ok); }
+  .big:not(.primary) { background: var(--bg); color: var(--ink); border: 1px solid var(--line); }
+  .wz-extra { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; justify-content: space-between; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .wz-extra h2 { margin: 0 0 4px; font-size: 16px; }
+  .wz-extra p { margin: 0; color: var(--muted); font-size: 14px; }
+  .wz-foot { margin: 0; text-align: center; }
+  .boardlist { display: grid; gap: 6px; max-height: 220px; overflow: auto; }
+  .boardlist button { text-align: left; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); cursor: pointer; font: inherit; }
+  .boardlist button:hover { border-color: var(--accent); }
+  .boardlist small { color: var(--muted); }
+  .replist { display: grid; gap: 8px; max-height: 62vh; overflow: auto; }
+  .replist > details { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .replist summary { cursor: pointer; }
+  .replist dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; font-size: 13px; margin: 8px 0; }
+  .replist dt { color: var(--muted); }
+  .replist dd { margin: 0; word-break: break-word; }
+  .replist pre { max-height: 220px; overflow: auto; background: var(--term-bg); color: var(--term-ink); padding: 8px; border-radius: 6px; font: 12px/1.45 var(--font-mono); white-space: pre-wrap; word-break: break-word; }
+  dialog.wide { width: min(780px, calc(100vw - 32px)); }
+
   @media (max-width: 860px) {
     .workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(320px, 1fr) auto; }
     .tabbar { flex-wrap: wrap; }
@@ -254,7 +286,9 @@
   <button class="round dev-only" id="btn-build" type="button" title="บันทึกและคอมไพล์ (Ctrl+S)"><span class="ico">✓</span>คอมไพล์</button>
   <button class="round primary dev-only" id="btn-upload" type="button" title="อัปโหลดลงบอร์ด (Ctrl+U)"><span class="ico">→</span>อัปโหลด</button>
   <button class="round dev-only" id="btn-scan" type="button" title="สแกนสาย ไฟเลี้ยง และสถานะบอร์ด โดยไม่เขียนโปรแกรม"><span class="ico">◎</span>ตรวจบอร์ด</button>
+  <button class="round dev-only" id="btn-lan" type="button" title="อัปเดตบอร์ดที่ติดตั้งแล้วผ่าน LAN โดยไม่ต่อสาย USB">LAN</button>
   <span class="spacer"></span>
+  <button class="round dev-only" id="btn-reports" type="button" title="รายงานปัญหาที่ช่างส่งมา" aria-label="รายงานปัญหาจากช่าง" hidden><span class="ico">⚑</span><span id="rep-count"></span></button>
   <button class="round dev-only" id="btn-github" type="button">GitHub</button>
 </header>
 
@@ -339,8 +373,20 @@
     <section class="wz-step" id="wz3">
       <span class="num">3</span>
       <div>
-        <h2>ติดตั้งโปรแกรมลงบอร์ด</h2>
+        <h2>ตั้ง IP แล้วติดตั้งโปรแกรมลงบอร์ด</h2>
         <p>ใช้เวลาราว 1 นาที ห้ามถอดสายระหว่างติดตั้ง</p>
+        <div class="ipbox" id="wz-ipbox" hidden>
+          <label class="ipopt"><input type="radio" name="wzip" value="set" checked> <b>ตั้ง IP ให้ไม้กั้นตัวนี้</b></label>
+          <div class="iprow">
+            <input class="txt" id="wz-ip" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="IP ของไม้กั้นตัวนี้" aria-describedby="wz-ipnote">
+            <span class="ipnote" id="wz-ipnote" aria-live="polite"></span>
+          </div>
+          <div class="iprow">
+            <label>Gateway<input class="txt" id="wz-gw" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+            <label>Subnet<input class="txt" id="wz-mask" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+          </div>
+          <label class="ipopt"><input type="radio" name="wzip" value="keep"> ไม่เปลี่ยน (ใช้ IP ที่บันทึกในบอร์ดอยู่แล้ว)</label>
+        </div>
         <div class="wz-row">
           <button class="big primary" id="wz-install" type="button" disabled>ติดตั้งลงบอร์ด</button>
           <button class="round" id="wz-scan" type="button">ตรวจสายและไฟก่อน</button>
@@ -348,6 +394,12 @@
         <div class="wz-status status" aria-live="polite"><span class="light" id="wz-light"></span><div><strong id="wz-title">ทำขั้นที่ 1 และ 2 ให้ครบก่อน</strong><span class="muted" id="wz-detail"></span></div></div>
       </div>
     </section>
+
+    <section class="wz-extra" id="wz-lanbox" hidden>
+      <div><h2>อัปเดตไม้กั้นที่ติดตั้งแล้ว ผ่าน LAN</h2><p>ไม่ต้องต่อสาย USB ไม่ต้องถอด IO0 ใช้คอมพิวเตอร์ที่เปิดหน้าไม้กั้นได้</p></div>
+      <button class="big" id="wz-lan" type="button">อัปเดตผ่าน LAN</button>
+    </section>
+    <p class="wz-foot" id="wz-reportbox" hidden><button class="linkbtn" id="wz-report" type="button">ติดตั้งไม่ผ่าน? ส่งรายงานปัญหาให้ผู้ดูแล</button></p>
   </div>
 </main>
 
@@ -368,6 +420,7 @@
       <h3 style="margin:0 0 8px">ขั้นต่อไป (ระบบติ๊กให้เองเมื่อเห็นจากบอร์ด)</h3>
       <ul class="post">
         <li id="post-io0">ถอดสายออกจากขา IO0 แล้วถอดไฟบอร์ดเสียบใหม่</li>
+        <li id="post-ip" hidden>ตั้ง IP ให้บอร์ด</li>
         <li id="post-lan">เสียบสาย LAN แล้วรอบอร์ดรายงาน IP</li>
       </ul>
       <p class="muted" id="ov-hint" style="margin:8px 0 0"></p>
@@ -375,6 +428,7 @@
     </div>
     <details class="ov-log"><summary>ข้อความจากบอร์ด</summary><pre id="ov-log"></pre></details>
     <div class="dlg-actions">
+      <button class="round" id="ov-report" type="button" hidden>ส่งรายงานปัญหา</button>
       <button class="round" id="ov-cancel" type="button">ยกเลิก</button>
       <button class="round primary" id="ov-close" type="button" hidden>ปิด</button>
     </div>
@@ -438,6 +492,44 @@
       <button class="round" value="close" type="submit">ปิด</button>
       <button class="round primary" value="retry" type="submit">ลองเลือกพอร์ตอีกครั้ง</button>
     </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-lan">
+  <form method="dialog" class="dlg">
+    <h3>อัปเดตผ่าน LAN</h3>
+    <p class="muted" style="margin:0">ใส่ IP ของไม้กั้นแล้วกด “เปิดหน้าอัปเดต” หน้าของบอร์ดจะเปิดในแท็บใหม่ และโหลดเวอร์ชัน <b id="lan-ver">—</b> จากเซิร์ฟเวอร์นี้ให้เอง ถ้าเวอร์ชันใหม่ใช้ไม่ได้ บอร์ดจะกลับไปเวอร์ชันเดิมเองภายใน 3 นาที</p>
+    <p class="danger" id="lan-warn" hidden></p>
+    <input class="txt" id="lan-ip" inputmode="decimal" placeholder="เช่น 10.99.99.50" autocomplete="off" spellcheck="false" aria-label="IP ของไม้กั้น">
+    <div class="boardlist" id="lan-boards"></div>
+    <p class="muted" style="font-size:13px;margin:0">ใช้ได้กับบอร์ดที่เคยติดตั้งผ่าน USB ด้วยเวอร์ชันที่มีระบบนี้แล้วอย่างน้อย 1 ครั้ง (ตั้งแต่ 24/11/69) · หน้าอัปเดตอยู่ที่พอร์ต <span id="lan-port">81</span> ของบอร์ด</p>
+    <div class="dlg-actions">
+      <button class="round" value="close" type="submit">ปิด</button>
+      <button class="round primary" id="lan-open" type="button">เปิดหน้าอัปเดต</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-report">
+  <form method="dialog" class="dlg">
+    <h3>ส่งรายงานปัญหาให้ผู้ดูแล</h3>
+    <p class="muted" style="margin:0">ระบบแนบสถานะล่าสุด ข้อความจากบอร์ด ชื่อตัวแปลง USB และเวอร์ชันโปรแกรมไปให้เอง</p>
+    <label>ชื่อผู้ส่ง / หน้างาน<input class="txt" id="rep-name" style="max-width:none" autocomplete="name"></label>
+    <label>เกิดอะไรขึ้น (ไม่ใส่ก็ได้)<textarea class="txt" id="rep-note"></textarea></label>
+    <p class="muted" id="rep-summary" style="font-size:13px;margin:0"></p>
+    <p id="rep-status" style="margin:0" aria-live="polite"></p>
+    <div class="dlg-actions">
+      <button class="round" value="close" type="submit">ปิด</button>
+      <button class="round primary" id="rep-send" type="button">ส่งรายงาน</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-reports" class="wide">
+  <form method="dialog" class="dlg">
+    <h3>รายงานปัญหาจากช่าง</h3>
+    <div class="replist" id="rep-list"></div>
+    <div class="dlg-actions"><button class="round" value="close" type="submit">ปิด</button></div>
   </form>
 </dialog>
 
@@ -605,12 +697,14 @@ async function gh(path, opts = {}) {
 // When the page is served by server/app.py, compiling happens on that server:
 // no GitHub token, ~20-60 s builds, and a Verify button like Arduino IDE.
 let serverMode = false;
+let srvInfo = null;
 
 async function detectServer() {
   try {
     const r = await fetch("api/info", { cache: "no-store" });
     if (!r.ok) return false;
     const i = await r.json();
+    srvInfo = i;
     return i.mode === "server";
   } catch { return false; }
 }
@@ -655,6 +749,7 @@ async function serverCompile(publish) {
   }
   const size = j.size ? ` · ใช้พื้นที่ ${j.size.percent}% (${(j.size.bytes / 1024).toFixed(0)} KB)` : "";
   if (j.warnings.length) out(`คำเตือน ${j.warnings.length} จุด (คอมไพล์ผ่าน)`, "w");
+  if (publish && j.lanUpdateSkip) out(`หมายเหตุ: เวอร์ชันนี้ไม่มีระบบอัปเดตผ่าน LAN และการตั้ง IP ตอนติดตั้ง (${j.lanUpdateSkip})`, "w");
   if (publish) {
     code.saved = text;
     setDirty();
@@ -1223,6 +1318,14 @@ async function uploadFlow(opts = {}) {
   }
   if (!install && !serverMode && cm.getValue() !== code.saved) out("หมายเหตุ: โค้ดที่แก้ยังไม่ได้คอมไพล์ จะอัปโหลดเวอร์ชันล่าสุดที่คอมไพล์แล้ว (" + manifest.version + ")", "w");
   if (!install && !(await askSafety())) return;
+  const plan = install ? ipPlan() : null;
+  if (plan) {
+    const c = ipCheck();
+    if (!c.ok) return;
+    if (c.dup && !confirm(`IP ${plan.ip} เคยตั้งให้บอร์ด ${c.dup.mac} แล้ว\nถ้าเป็นบอร์ดตัวเดิม กด OK ได้เลย\nถ้าเป็นบอร์ดตัวใหม่ กด Cancel แล้วเปลี่ยน IP (IP ซ้ำทำให้ไม้กั้นสองตัวใช้งานไม่ได้)`)) return;
+    store.set("wz_gw", plan.gw);
+    store.set("wz_mask", plan.mask);
+  }
   let port = await needPort();
   if (!port) return;
 
@@ -1235,6 +1338,9 @@ async function uploadFlow(opts = {}) {
   showTab("out");
   out("── อัปโหลด ──────────────────────────");
   ovOpen(install ? "กำลังติดตั้งโปรแกรมไม้กั้น" : "กำลังอัปโหลด");
+  post.plan = plan;
+  $("post-ip").hidden = !plan;
+  if (plan) $("post-ip").textContent = `ระบบตั้ง IP ${plan.ip} ให้บอร์ดเอง (ต่อสาย USB ไว้จนข้อนี้ถูกติ๊ก)`;
   ovStage("check");
   await monitorStop();
 
@@ -1302,7 +1408,7 @@ async function uploadFlow(opts = {}) {
     await loader.after("hard_reset");
     ok = true;
     boardStatus("ok", "ติดตั้งสำเร็จ", "ถอด IO0 ออกจาก GND แล้วถอดไฟบอร์ดเสียบใหม่ แล้วเสียบสาย LAN");
-    ovMsg("ok", "ติดตั้งสำเร็จ", "ข้อมูลในบอร์ดตรงกับไฟล์ทุกส่วน (ตรวจ MD5 แล้ว)");
+    ovMsg("ok", "ติดตั้งสำเร็จ", "ข้อมูลในบอร์ดตรงกับไฟล์ทุกส่วน (ตรวจ MD5 แล้ว)" + (plan ? ` · หลังบอร์ดบูต ระบบจะตั้ง IP ${plan.ip} ให้เอง` : ""));
     $("ov-post").hidden = false;
     post.active = true;
     out("ขั้นต่อไป: ถอด IO0 ออกจาก GND แล้วถอดไฟบอร์ดเสียบใหม่ เปิด Serial Monitor ให้แล้ว", "o");
@@ -1445,7 +1551,9 @@ const WIRES_FOR = {
   running: ["io0"],
   apploop: ["io0"],
 };
+let lastProblem = null;
 function highlightWiring(state) {
+  if (state) lastProblem = state;
   const bad = WIRES_FOR[state] || [];
   for (const box of document.querySelectorAll(".wiring")) {
     box.classList.toggle("has-bad", bad.length > 0);
@@ -1482,7 +1590,13 @@ function wizardRefresh() {
   $("wz1").dataset.done = String(hasPort);
   const wired = ["wzc1", "wzc2", "wzc3"].every((id) => $(id).checked);
   $("wz2").dataset.done = String(wired);
-  const can = hasPort && wired && !!manifest && "serial" in navigator && !uploading;
+  $("wz-ipbox").hidden = !(serverMode && manifest && manifest.lanUpdate);
+  $("wz-ipbox").dataset.keep = String(!$("wz-ipbox").hidden && ipPlan() === null);
+  const ipc = ipCheck();
+  $("wz-ipnote").textContent = ipc.msg || "";
+  $("wz-ipnote").dataset.s = ipc.s || "";
+  for (const id of ["wz-ip", "wz-gw", "wz-mask"]) $(id).setAttribute("aria-invalid", String(!!ipPlan() && !IPV4.test($(id).value.trim())));
+  const can = hasPort && wired && ipc.ok && !!manifest && "serial" in navigator && !uploading;
   $("wz-install").disabled = !can;
   if (!("serial" in navigator)) {
     $("wz-install").textContent = "ใช้คอมพิวเตอร์ (Chrome / Edge)";
@@ -1491,6 +1605,7 @@ function wizardRefresh() {
     if (!manifest) wzStatus("warn", "ยังไม่มีโปรแกรมที่พร้อมติดตั้ง", "ให้ผู้ดูแลคอมไพล์ในโหมดนักพัฒนาก่อน");
     else if (!hasPort) wzStatus("", "ทำขั้นที่ 1: เลือกพอร์ต", "");
     else if (!wired) wzStatus("", "ทำขั้นที่ 2: ต่อสายแล้วติ๊กให้ครบ", "");
+    else if (!ipc.ok) wzStatus("warn", "ขั้นที่ 3: แก้ IP ให้ถูกต้อง", ipc.msg);
     else wzStatus("ok", "พร้อมติดตั้ง", "กด “ติดตั้งลงบอร์ด”");
   }
 }
@@ -1499,10 +1614,207 @@ $("wz-port").onclick = async () => { wzHold = false; await addPort(); wizardRefr
 $("wz-porthelp").onclick = () => showPortHelp();
 $("wz-scan").onclick = () => scanFlow();
 $("wz-install").onclick = () => uploadFlow({ install: true });
+for (const id of ["wz-ip", "wz-gw", "wz-mask"]) $(id).addEventListener("input", () => { wzHold = false; wizardRefresh(); });
+for (const r of document.querySelectorAll('input[name="wzip"]')) r.addEventListener("change", () => { wzHold = false; wizardRefresh(); });
+
+/* ======================= IP for the board (install wizard) ======================= */
+// The firmware add-on stores it in the sketch's own Preferences keys when the
+// wizard sends "GC SETIP ..." over USB right after the first boot.
+const IPV4 = /^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/;
+const ipNum = (s) => s.split(".").reduce((a, b) => a * 256 + Number(b), 0);
+const numIp = (n) => [24, 16, 8, 0].map((sh) => Math.floor(n / 2 ** sh) % 256).join(".");
+let boards = [];
+async function loadBoards() {
+  if (!serverMode) return;
+  try { const r = await fetch("api/boards", { cache: "no-store" }); if (r.ok) boards = await r.json(); } catch {}
+}
+function suggestIp() {
+  const from = srvInfo?.ipConfig?.suggestFrom;
+  if (!from || !IPV4.test(from)) return "";
+  const used = new Set(boards.map((b) => b.ip));
+  const gw = $("wz-gw").value.trim();
+  for (let n = ipNum(from), i = 0; i < 400; i++, n++) {
+    if (n % 256 === 0 || n % 256 === 255) continue;
+    const ip = numIp(n);
+    if (!used.has(ip) && ip !== gw) return ip;
+  }
+  return "";
+}
+function initIpFields() {
+  const cfg = srvInfo?.ipConfig || {};
+  $("wz-gw").value = store.get("wz_gw") || cfg.gateway || "";
+  $("wz-mask").value = store.get("wz_mask") || cfg.subnet || "255.255.255.0";
+  if (!$("wz-ip").value) $("wz-ip").value = suggestIp();
+}
+function ipPlan() {
+  if ($("wz-ipbox").hidden) return null;
+  if (document.querySelector('input[name="wzip"]:checked')?.value !== "set") return null;
+  return { ip: $("wz-ip").value.trim(), gw: $("wz-gw").value.trim(), mask: $("wz-mask").value.trim() };
+}
+function ipCheck() {
+  const p = ipPlan();
+  if (!p) return { ok: true };
+  for (const [k, v] of [["IP", p.ip], ["Gateway", p.gw], ["Subnet", p.mask]]) {
+    if (!IPV4.test(v)) return { ok: false, s: "bad", msg: v ? `${k} ไม่ถูกต้อง` : `ใส่ ${k}` };
+  }
+  const block = 2 ** 32 - ipNum(p.mask) || 1;
+  const net = (x) => Math.floor(ipNum(x) / block);
+  if (net(p.ip) !== net(p.gw)) return { ok: false, s: "bad", msg: "IP กับ Gateway อยู่คนละวง" };
+  if (p.ip === p.gw) return { ok: false, s: "bad", msg: "IP ซ้ำกับ Gateway" };
+  const dup = boards.find((b) => b.ip === p.ip);
+  if (dup) return { ok: true, dup, s: "bad", msg: `IP นี้เคยตั้งให้บอร์ด ${dup.mac} (${(dup.updated || "").slice(0, 10)}) ถ้าเป็นบอร์ดตัวเดิมใช้ต่อได้` };
+  return { ok: true, s: "ok", msg: "✓ ยังไม่มีไม้กั้นตัวอื่นในรายการใช้ IP นี้" };
+}
+async function serialSend(line) {
+  if (!mon.running || !mon.port?.writable) return false;
+  let w;
+  try { w = mon.port.writable.getWriter(); await w.write(new TextEncoder().encode(line + "\n")); return true; }
+  catch { return false; }
+  finally { try { w?.releaseLock(); } catch {} }
+}
+async function sendSetIp() {
+  const p = post.plan;
+  if (!p || post.ipSet) return;
+  post.sent++;
+  await serialSend(`GC SETIP STATIC ${p.ip} ${p.gw} ${p.mask}`);
+  setTimeout(() => { if (post.active && !post.ipSet && post.sent < 3) sendSetIp(); }, 4000);
+}
+async function registerBoard(ip) {
+  if (!serverMode || !post.mac || post.registered === ip) return;
+  post.registered = ip;
+  try {
+    await fetch("api/boards", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mac: post.mac, ip, version: post.ver || manifest?.version || "" }) });
+    await loadBoards();
+  } catch {}
+}
+
+/* ======================= Update over LAN ======================= */
+function openLan() {
+  const lu = srvInfo?.lanUpdate;
+  $("lan-ver").textContent = manifest?.version || "—";
+  $("lan-port").textContent = lu?.port || 81;
+  const warn = !serverMode || !lu?.token ? "ใช้ได้เฉพาะหน้า IDE บนเซิร์ฟเวอร์"
+    : !manifest?.lanUpdate ? "เวอร์ชันล่าสุดยังไม่มีระบบอัปเดตผ่าน LAN ให้ผู้ดูแลกดอัปโหลดในโหมดนักพัฒนา 1 ครั้งเพื่อคอมไพล์ใหม่" : "";
+  $("lan-warn").textContent = warn;
+  $("lan-warn").hidden = !warn;
+  $("lan-open").disabled = !!warn;
+  const list = $("lan-boards");
+  list.replaceChildren();
+  for (const b of boards.filter((x) => x.ip)) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    const a = document.createElement("span"); a.textContent = b.ip;
+    const c = document.createElement("small"); c.textContent = (b.updated || "").replace("T", " ").slice(0, 16);
+    const d = document.createElement("small"); d.textContent = `${b.mac} · ${b.version || "?"}`;
+    d.style.gridColumn = "1 / -1";
+    btn.append(a, c, d);
+    btn.onclick = () => { $("lan-ip").value = b.ip; $("lan-ip").removeAttribute("aria-invalid"); $("lan-ip").focus(); };
+    list.append(btn);
+  }
+  $("lan-ip").value = store.get("lan_ip") || "";
+  $("dlg-lan").showModal();
+}
+$("lan-open").onclick = () => {
+  const ip = $("lan-ip").value.trim();
+  if (!IPV4.test(ip)) { $("lan-ip").setAttribute("aria-invalid", "true"); $("lan-ip").focus(); return; }
+  $("lan-ip").removeAttribute("aria-invalid");
+  store.set("lan_ip", ip);
+  const lu = srvInfo.lanUpdate;
+  window.open(`http://${ip}:${lu.port}/#s=${encodeURIComponent(location.origin)}&t=${encodeURIComponent(lu.token)}`, "_blank", "noopener");
+};
+$("btn-lan").onclick = openLan;
+$("wz-lan").onclick = openLan;
+
+/* ======================= Problem reports ======================= */
+let repDraft = null;
+function openReport() {
+  const t = (id) => $(id)?.textContent || "";
+  const inOv = !$("ov").hidden;
+  const info = selectedPort?.getInfo?.() || {};
+  repDraft = {
+    mode, version: manifest?.version || null, problem: lastProblem,
+    title: inOv ? t("ov-msg-t") : mode === "install" ? t("wz-title") : t("b-title"),
+    detail: inOv ? t("ov-msg-d") : mode === "install" ? t("wz-detail").trim() : t("b-detail"),
+    port: selectedPort ? { label: portLabel(selectedPort, ports.indexOf(selectedPort)), vid: info.usbVendorId ?? null, pid: info.usbProductId ?? null } : null,
+    stages: inOv ? [...$("ov-stages").children].map((li) => `${li.textContent}: ${li.dataset.state || "-"}`).join(" · ") : "",
+    ip: post.plan?.ip || post.ip || null,
+    boardLog: (t("ov-log") || serEl.textContent).slice(-15000),
+    output: t("out").slice(-8000),
+    browser: navigator.userAgent,
+    screen: `${innerWidth}x${innerHeight}`,
+  };
+  const lines = repDraft.boardLog.split("\n").filter(Boolean).length;
+  $("rep-summary").textContent = `จะแนบ: “${repDraft.title}” · พอร์ต ${repDraft.port?.label || "ยังไม่ได้เลือก"} · ข้อความจากบอร์ด ${lines} บรรทัด · เวอร์ชัน ${repDraft.version || "—"}`;
+  $("rep-name").value = store.get("rep_name") || "";
+  $("rep-note").value = "";
+  $("rep-status").textContent = "";
+  $("rep-send").disabled = !serverMode;
+  if (!serverMode) $("rep-status").textContent = "ส่งรายงานได้เฉพาะหน้า IDE บนเซิร์ฟเวอร์";
+  $("dlg-report").showModal();
+}
+$("rep-send").onclick = async () => {
+  const name = $("rep-name").value.trim().slice(0, 80);
+  store.set("rep_name", name || null);
+  $("rep-send").disabled = true;
+  $("rep-status").textContent = "กำลังส่ง…";
+  try {
+    const r = await fetch("api/reports", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...repDraft, name, note: $("rep-note").value.trim().slice(0, 2000) }) });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    $("rep-status").textContent = `ส่งแล้ว ✓ เลขที่ ${j.id} ผู้ดูแลจะเห็นในโหมดนักพัฒนา (ปุ่ม ⚑)`;
+    refreshReportCount();
+  } catch (e) {
+    $("rep-status").textContent = "ส่งไม่สำเร็จ: " + e.message;
+    $("rep-send").disabled = false;
+  }
+};
+$("ov-report").onclick = openReport;
+$("wz-report").onclick = openReport;
+
+async function refreshReportCount() {
+  if (!serverMode) return [];
+  try {
+    const r = await fetch("api/reports", { cache: "no-store" });
+    const list = r.ok ? await r.json() : [];
+    $("rep-count").textContent = list.length ? String(list.length) : "";
+    return list;
+  } catch { return []; }
+}
+async function openReports() {
+  const box = $("rep-list");
+  const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+  box.replaceChildren(el("p", "กำลังโหลด…", "muted"));
+  $("dlg-reports").showModal();
+  const list = await refreshReportCount();
+  box.replaceChildren();
+  if (!list.length) { box.append(el("p", "ยังไม่มีรายงาน", "muted")); return; }
+  for (const r of list) {
+    const d = el("details");
+    const sum = el("summary");
+    sum.append(el("b", (r.time || "").replace("T", " ")), ` · ${r.name || "ไม่ระบุชื่อ"} · ${r.title || ""}`);
+    const dl = el("dl");
+    for (const [k, v] of [["เกิดอะไรขึ้น", r.note], ["รายละเอียด", r.detail], ["อาการที่ตรวจเจอ", r.problem], ["ขั้นตอน", r.stages],
+                          ["พอร์ต", r.port ? `${r.port.label} (VID ${r.port.vid ?? "?"} PID ${r.port.pid ?? "?"})` : ""], ["IP", r.ip],
+                          ["เวอร์ชัน", r.version], ["โหมด", r.mode], ["เครื่อง", `${r.client || ""} · ${r.screen || ""}`], ["เบราว์เซอร์", r.browser]]) {
+      if (!v) continue;
+      dl.append(el("dt", k), el("dd", String(v)));
+    }
+    const del = el("button", "ลบรายงานนี้", "round");
+    del.type = "button";
+    del.onclick = async () => { await fetch("api/reports/" + encodeURIComponent(r.id), { method: "DELETE" }); d.remove(); refreshReportCount(); };
+    d.append(sum, dl, el("pre", r.boardLog || "(ไม่มีข้อความจากบอร์ด)"));
+    if (r.output) { const o = el("details"); o.append(el("summary", "ผลลัพธ์ในหน้า IDE"), el("pre", r.output)); d.append(o); }
+    d.append(del);
+    box.append(d);
+  }
+}
+$("btn-reports").onclick = openReports;
 
 /* ======================= Full-screen progress ======================= */
 let ovStageNow = null;
-const post = { active: false, booted: false, ip: null, tail: "" };
+const post = { active: false, booted: false, ip: null, tail: "", plan: null, sent: 0, ipSet: false, mac: null, ver: null, registered: null };
 function ovOpen(title) {
   $("ov-title").textContent = title;
   for (const li of $("ov-stages").children) delete li.dataset.state;
@@ -1515,7 +1827,8 @@ function ovOpen(title) {
   $("ov-hint").textContent = "";
   $("ov-log").textContent = "";
   for (const id of ["post-io0", "post-lan"]) delete $(id).dataset.done;
-  Object.assign(post, { active: false, booted: false, ip: null, tail: "" });
+  Object.assign(post, { active: false, booted: false, ip: null, tail: "", plan: null, sent: 0, ipSet: false, mac: null, ver: null, registered: null });
+  $("ov-report").hidden = true;
   highlightWiring(null);
   $("ov").hidden = false;
 }
@@ -1534,7 +1847,7 @@ function ovProgress(p) {
   $("ov-pct").textContent = v + "%";
   $("ov-bar").style.width = v + "%";
 }
-function ovFinish() { $("ov-cancel").hidden = true; $("ov-close").hidden = false; }
+function ovFinish() { $("ov-cancel").hidden = true; $("ov-close").hidden = false; $("ov-report").hidden = !serverMode; }
 $("ov-cancel").onclick = () => { cancelUpload = true; ovMsg("warn", "กำลังยกเลิก…", ""); };
 $("ov-close").onclick = () => { $("ov").hidden = true; post.active = false; highlightWiring(null); wizardRefresh(); };
 
@@ -1553,6 +1866,19 @@ function postWatch(text) {
   if ((post.tail.match(/ets Jul 29/g) || []).length >= 3 && !post.ip) {
     $("ov-hint").textContent = "บอร์ดรีสตาร์ทวน: ตรวจไฟเลี้ยง (ใช้ขา 5V ไม่ใช่ 3V3) และไม่มีสายค้างที่ขา IO0";
   }
+  const gc = post.tail.match(/\[GC\] ver=(\S+) mac=([0-9A-F:]{17})/);
+  if (gc) { post.ver = gc[1]; post.mac = gc[2]; }
+  if (gc && post.plan && !post.sent && !post.ipSet) {
+    $("ov-hint").textContent = `กำลังตั้ง IP ${post.plan.ip} ให้บอร์ด…`;
+    sendSetIp();
+  }
+  if (!post.ipSet && /\[GC\] SETIP OK/.test(post.tail)) {
+    post.ipSet = true;
+    $("post-ip").dataset.done = "true";
+    $("ov-hint").textContent = `บันทึก IP ${post.plan?.ip || ""} แล้ว บอร์ดกำลังรีสตาร์ท — เสียบสาย LAN`;
+    if (post.plan) registerBoard(post.plan.ip);
+  }
+  if (/\[GC\] SETIP ERR/.test(text)) $("ov-hint").textContent = "บอร์ดตั้ง IP ไม่สำเร็จ ตั้งเองได้ที่หน้าเว็บของบอร์ด หรือกดส่งรายงานปัญหา";
   const m = post.tail.match(IP_LINE);
   if (m && m[1] !== "0.0.0.0" && post.ip !== m[1]) {
     post.ip = m[1];
@@ -1563,6 +1889,10 @@ function postWatch(text) {
     $("ov-open").hidden = false;
     $("ov-hint").textContent = "เสร็จเรียบร้อย ✓";
     ovMsg("ok", "ติดตั้งและเชื่อมต่อ LAN สำเร็จ", `บอร์ดได้ IP ${m[1]}`);
+    if (post.plan && post.plan.ip !== m[1]) {
+      ovMsg("warn", "บอร์ดได้ IP ไม่ตรงกับที่ตั้ง", `ตั้งไว้ ${post.plan.ip} แต่บอร์ดใช้ ${m[1]} ตรวจหน้าเว็บของบอร์ด หรือส่งรายงานปัญหา`);
+    }
+    registerBoard(m[1]);
   }
 }
 
@@ -1593,6 +1923,14 @@ if (serverMode) {
   $("btn-upload").title = "คอมไพล์ บันทึก และอัปโหลดลงบอร์ด (Ctrl+U)";
 }
 applyEditable();
+if (serverMode) {
+  $("wz-lanbox").hidden = false;
+  $("wz-reportbox").hidden = false;
+  $("btn-reports").hidden = false;
+  await loadBoards();
+  initIpFields();
+  refreshReportCount();
+}
 try {
   await loadManifest();
   buildStatus("ok", "พร้อมอัปโหลด", manifest.version);

@@ -1,7 +1,9 @@
 {
   "name": "Gate Controller (WT32-ETH01)",
   "title": "Gate Controller IDE",
-  "targets": ["esp32"],
+  "targets": [
+    "esp32"
+  ],
   "esp32Core": "3.3.12",
   "updateUrl": "",
   "beforeInstall": [
@@ -10,5 +12,18 @@
   "afterInstall": [
     "ถอดสาย IO0 ออกจาก GND",
     "ถอดไฟแล้วเสียบใหม่ บอร์ดจะเริ่มทำงาน และหน้านี้จะแสดง IP ของบอร์ดให้"
-  ]
+  ],
+  "ipConfig": {
+    "namespace": "eth-config",
+    "modeKey": "ipMode",
+    "ipKey": "staticIP",
+    "gatewayKey": "gateway",
+    "subnetKey": "subnet",
+    "staticValue": "Static",
+    "dhcpValue": "DHCP",
+    "gateway": "10.99.99.254",
+    "subnet": "255.255.255.0",
+    "suggestFrom": "10.99.99.50"
+  },
+  "lanUpdatePort": 81
 }
